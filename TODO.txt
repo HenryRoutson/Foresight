@@ -1,0 +1,37 @@
+
+
+
+WHAT the fuck is this 
+
+
+
+#### Multi-Head Prediction System
+The model employs specialized output heads for each component:
+
+1. **Outcome Probability Head**
+   - Softmax layer over all possible outcome types
+   - Ensures probabilities sum to 1.0 across all outcomes
+   - Handles dynamic outcome vocabularies
+
+2. **Timing Prediction Head**
+   - Regression head for each outcome type
+   - Predicts relative time until event occurrence
+   - Can use different time units (minutes, hours, days)
+
+3. **Outcome Data Heads**
+   - Separate prediction heads for each outcome type's data structure
+   - **Numerical features**: Regression outputs
+   - **Categorical features**: Classification outputs
+   - **Boolean features**: Sigmoid activation
+   - **Mixed-type features**: Hybrid prediction heads
+
+
+
+
+
+
+need to handle sub outcomes
+
+ie 
+
+recieve_donor_blood
