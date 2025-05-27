@@ -65,3 +65,6 @@ and the surgery is meant to
 
 TODO need to make sure this isn't simple to just use basic analysis to discover
 ie can't just look at a simple line graph and see look here. needs to interfere with multiple variables and also use the attention mechanism of a tranformer.
+
+
+TODO ideally there would also be a comparison between a model which has seperate models for each outcome and so has less data.

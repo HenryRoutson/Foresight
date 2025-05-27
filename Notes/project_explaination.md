@@ -38,3 +38,15 @@ Traditional multi-task learning applies loss to all predicted outputs, which is 
 - Only one outcome actually occurs per prediction step
 - Predicting data for non-occurring outcomes has no ground truth
 - Standard loss would penalize accurate predictions for unobserved outcomes
+
+
+## Other notes
+
+### Why you shouldn't use specialised heads for each outcome
+
+Each specialized head needs its own data to learn underlying patterns, even if there is lots of overlap. For example ... 
+- 'Create post' head learns "user engagement patterns" 
+- 'Like' head learns "user engagement patterns"
+- 'Comment' head learns "user engagement patterns"
+
+With seperate heads there is no **transfer Learning** Between Outcomes
