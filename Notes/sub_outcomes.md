@@ -25,3 +25,6 @@ This would also be complicated.
 However,
 if i was to one hot encode each of these outcomes, 
 there would need to be some specialised softmax logic to make sure the output adds up to one for each OHE enum group.
+
+
+I should also note that as mentioned in other areas in my notes i do not want to use specialised heads as this removes transfer learning. 
