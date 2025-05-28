@@ -1,1 +1,0 @@
-# This file contains an example of what the library is doing without the library.
