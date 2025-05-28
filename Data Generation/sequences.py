@@ -3,7 +3,7 @@ import pandas as pd
 from typing import Any, List
 
 # AI: Generate predictable 9x9 transition matrix with dominant transitions
-def generate_transition_matrix(size: int = 9, dominant_prob: float = 0.97) -> np.ndarray:
+def generate_transition_matrix(size: int = 9, dominant_prob: float = 0.97) -> np.ndarray[Any, np.dtype[np.float64]]:
     """Generate a transition probability matrix with predictable sequences."""
     matrix = np.zeros((size, size))
     
@@ -30,32 +30,28 @@ def generate_transition_matrix(size: int = 9, dominant_prob: float = 0.97) -> np
     return matrix
 
 # AI: Generate sequences using the transition matrix
-def generate_sequences(transition_matrix: np.ndarray, 
-                      num_sequences: int = 10, 
-                      sequence_length: int = 20,
-                      initial_state: int = 0) -> List[List[int]]:
+def generate_sequence(transition_matrix: np.ndarray[Any, np.dtype[np.float64]], 
+                      sequence_length: int = 1000000, # need to make enough data to generalize
+                      initial_state: int = 0) -> List[int]:
     """Generate sequences using the transition matrix."""
-    sequences = []
-    
-    for _ in range(num_sequences):
-        sequence = [initial_state]
-        current_state = initial_state
-        
-        # AI: Generate sequence by sampling from transition probabilities
-        for _ in range(sequence_length - 1):
-            # AI: Get transition probabilities for current state
-            probs = transition_matrix[current_state]
-            
-            # AI: Sample next state based on probabilities
-            next_state = np.random.choice(len(probs), p=probs)
-            sequence.append(next_state)
-            current_state = next_state
-        
-        sequences.append(sequence)
-    
-    return sequences
 
-def print_matrix_info(matrix: np.ndarray) -> None:
+    sequence = [initial_state]
+    current_state = initial_state
+    
+    # AI: Generate sequence by sampling from transition probabilities
+    for _ in range(sequence_length - 1):
+        # AI: Get transition probabilities for current state
+        probs = transition_matrix[current_state]
+        
+        # AI: Sample next state based on probabilities
+        next_state = np.random.choice(len(probs), p=probs)
+        sequence.append(next_state)
+        current_state = next_state
+    
+
+    return sequence
+
+def print_matrix_info(matrix: np.ndarray[Any, np.dtype[np.float64]]) -> None:
     """Print matrix with state labels and verification."""
     # AI: State labels based on the example.txt file
     states = [
@@ -88,7 +84,7 @@ def print_matrix_info(matrix: np.ndarray) -> None:
         print(f"  Row {i}: {sum_val:.6f}")
 
 # AI: Print generated sequences with state labels
-def print_sequences(sequences: List[List[int]]) -> None:
+def print_sequence(sequence: List[int]) -> None:
     """Print generated sequences with readable state labels."""
     state_labels = [
         "[A, A]",           
@@ -102,17 +98,15 @@ def print_sequences(sequences: List[List[int]]) -> None:
         "[B{True}, B{True}]"    
     ]
     
-    print("\nGenerated Sequences")
+    print("\nGenerated Sequence")
     print("===================")
-    for i, sequence in enumerate(sequences):
-        print(f"\nSequence {i+1}:")
-        print("State indices:", " -> ".join(map(str, sequence)))
-        print("State labels: ", " -> ".join([state_labels[state] for state in sequence]))
+    print("State indices:", " -> ".join(map(str, sequence)))
+    print("State labels: ", " -> ".join([state_labels[state] for state in sequence]))
 
 if __name__ == "__main__":
     # AI: Generate and display the transition matrix
     np.random.seed(42)  # For reproducible results
-    transition_matrix = generate_transition_matrix()
+    transition_matrix: np.ndarray[Any, np.dtype[np.float64]] = generate_transition_matrix()
     print_matrix_info(transition_matrix)
     
     # AI: Save matrix to file
@@ -120,9 +114,9 @@ if __name__ == "__main__":
     print(f"\nMatrix saved to 'transition_matrix.npy'")
     
     # AI: Generate sequences using the transition matrix
-    sequences = generate_sequences(transition_matrix, num_sequences=5, sequence_length=15, initial_state=0)
-    print_sequences(sequences)
+    sequence = generate_sequence(transition_matrix)
+    print_sequence(sequence)
     
     # AI: Save sequences to file
-    np.save("generated_sequences.npy", np.array(sequences, dtype=object))
-    print(f"\nSequences saved to 'generated_sequences.npy'") 
+    np.save("generated_sequence.npy", np.array(sequence, dtype=object))
+    print(f"\nSequence saved to 'generated_sequence.npy'") 
