@@ -1,0 +1,9 @@
+Can you try to give me an example of data generation which is hard to visualise with simple tools like plots because it is sequence dependent, 
+but also a simple sequence model cannot capture the entire relationship if it doesn't also contain data inside each sequence entry. 
+For example, company price is impacted by ordered discrete events like hiring a new CEO, and the values related to these events might correlate to stock prices. 
+For example the proportion of the board which voted in the new CEO. 
+Give me python code which cannot be modelled easily by either system, 1 simple visualisation of values, 2 sequence with no values modelling. 
+Make the example about stock price.
+
+
+
