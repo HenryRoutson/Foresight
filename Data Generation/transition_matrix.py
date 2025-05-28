@@ -2,17 +2,32 @@ import numpy as np
 import pandas as pd
 from typing import Any
 
-# AI: Generate random 9x9 transition matrix where each row sums to 1
-def generate_transition_matrix(size: int = 9) -> np.ndarray[Any, np.dtype[np.float64]]:
-    """Generate a random transition probability matrix."""
-    # AI: Create random matrix with positive values
-    matrix = np.random.rand(size, size)
+# AI: Generate predictable 9x9 transition matrix with dominant transitions
+def generate_transition_matrix(size: int = 9, dominant_prob: float = 0.97) -> np.ndarray[Any, np.dtype[np.float64]]:
+    """Generate a transition probability matrix with predictable sequences."""
+    matrix = np.zeros((size, size))
     
-    # AI: Normalize each row to sum to 1 (row-stochastic matrix)
-    row_sums = matrix.sum(axis=1, keepdims=True)
-    transition_matrix = matrix / row_sums
+    # AI: For each state, choose one dominant next state with ~97% probability
+    for i in range(size):
+        # AI: Choose a random dominant next state for this current state
+        dominant_next_state = np.random.randint(0, size)
+        
+        # AI: Set dominant probability
+        matrix[i, dominant_next_state] = dominant_prob
+        
+        # AI: Distribute remaining probability among other states
+        remaining_prob = 1.0 - dominant_prob
+        other_states = [j for j in range(size) if j != dominant_next_state]
+        
+        # AI: Generate small random probabilities that sum to remaining_prob
+        small_probs = np.random.rand(len(other_states))
+        small_probs = small_probs / small_probs.sum() * remaining_prob
+        
+        # AI: Assign small probabilities to other states
+        for j, state in enumerate(other_states):
+            matrix[i, state] = small_probs[j]
     
-    return transition_matrix
+    return matrix
 
 def print_matrix_info(matrix: np.ndarray[Any, np.dtype[np.float64]]) -> None:
     """Print matrix with state labels and verification."""
