@@ -22,6 +22,9 @@ The purpose of this library is to build a library which can easily create a mode
 This is meant to generate data which will have lower performance for using a combination of models which do not see the interactions between the sequence and event data.
 
 
+The multi head model should have a head for each outcome it is predicting.
+The data should be created in a way that the multi head model cannot take advantage of transfer learning, and so should have lower performance.
+
 
 when creating plots for model performance,
 you should plot the training and validation performance at each time step to watch for overfitting. 
