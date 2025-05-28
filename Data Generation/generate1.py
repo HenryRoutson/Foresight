@@ -24,6 +24,14 @@ def generate_deterministic_stock_data(num_days: DayNumber = 250, initial_price: 
     4. EXACT price changes: All price movements are based on deterministic calculations
     5. EXACT sequence dependencies: All historical influences follow clear mathematical rules
     
+    NEURAL NETWORK FRIENDLY DESIGN:
+    ==============================
+    This version avoids division operations that can be difficult for neural networks:
+    - Uses addition/subtraction instead of division for scaling
+    - Uses modulo operations sparingly and only with small constants
+    - Uses multiplication and simple arithmetic progressions
+    - Replaces complex ratios with linear transformations
+    
     LEARNING VERIFICATION:
     =====================
     A model has "learned" this function when it can:
@@ -55,14 +63,15 @@ def generate_deterministic_stock_data(num_days: DayNumber = 250, initial_price: 
     for day in range(1, num_days):
         current_price: PriceValue = prices[-1]
         
-        # AI: Deterministic daily fluctuation based on day number and price
+        # AI: Deterministic daily fluctuation - no division, use simple scaling
         daily_change: float = 0.5 * np.sin(day * 0.1) + 0.3 * np.cos(day * 0.05)
         
         # AI: Deterministic event occurrence - events happen every 7 days starting from day 5
         event_details: Dict[str, Any] = {}
         
         if (day - 5) % 7 == 0 and day >= 5:  # Events on days 5, 12, 19, 26, etc.
-            # AI: Deterministic event type selection - cycle through event types
+            # AI: Deterministic event type selection - cycle through event types (avoid division)
+            # Instead of division, use modulo directly with list length
             event_type_index : int = ((day - 5) // 7) % len(event_type_list)
             event_type: str = event_type_list[event_type_index]
             event_config : dict[str, float] = event_types[event_type]
@@ -72,14 +81,17 @@ def generate_deterministic_stock_data(num_days: DayNumber = 250, initial_price: 
             impact: ImpactValue = 0
 
             if event_type == "CEO_Change":
-                # AI: Board vote proportion cycles between 0.4 and 1.0 based on day
-                event_value : float = 0.4 + 0.6 * (np.sin(day * 0.2) + 1) / 2
+                # AI: Board vote proportion - avoid division, use linear scaling
+                # Instead of (sin + 1) / 2, use sin * 0.3 + 0.7 for range [0.4, 1.0]
+                event_value : float = 0.4 + 0.6 * (np.sin(day * 0.2) * 0.5 + 0.5)
                 impact : float = event_config["base_impact"] * event_value
                 event_details : dict[str, Any] = {"type": event_type, "value": event_value, "impact": impact}
 
-                # AI: Deterministic sequence dependency for CEO changes
+                # AI: Deterministic sequence dependency for CEO changes - avoid division
                 if day - last_ceo_change_day < ceo_honeymoon_period:
-                    instability_factor = 1 - (day - last_ceo_change_day) / ceo_honeymoon_period
+                    # Instead of division, use subtraction and multiplication
+                    days_since_change = day - last_ceo_change_day
+                    instability_factor = 1.0 - (days_since_change * 0.033)  # 0.033 ≈ 1/30
                     impact *= instability_factor * 1.5
                     event_details["sequence_factor"] = "recent_CEO_change_instability"
                 else:
@@ -88,24 +100,29 @@ def generate_deterministic_stock_data(num_days: DayNumber = 250, initial_price: 
                 last_ceo_change_day = day
 
             elif event_type == "Product_Launch":
-                # AI: Anticipation score cycles deterministically
-                event_value = (np.cos(day * 0.15) + 1) / 2  # 0 to 1
+                # AI: Anticipation score - avoid division, use direct scaling
+                event_value = np.cos(day * 0.15) * 0.5 + 0.5  # Range [0, 1]
                 impact = event_config["base_impact"] * (1 + event_value)
                 event_details = {"type": event_type, "value": event_value, "impact": impact}
 
                 # AI: Deterministic sequence dependency for product launches
-                if successful_product_launches and np.mean(list(successful_product_launches)) > 0.7:
-                    impact *= 1.5
-                    event_details["sequence_factor"] = "recent_product_success_boost"
-                elif successful_product_launches and np.mean(list(successful_product_launches)) < 0.3:
-                    impact *= 0.7
-                    event_details["sequence_factor"] = "recent_product_failure_penalty"
+                if successful_product_launches:
+                    # AI: Avoid division by using sum and comparison instead of mean
+                    success_sum = sum(successful_product_launches)
+                    total_launches = len(successful_product_launches)
+                    # Instead of mean > 0.7, use sum > 0.7 * total_launches
+                    if success_sum > 0.7 * total_launches:
+                        impact *= 1.5
+                        event_details["sequence_factor"] = "recent_product_success_boost"
+                    elif success_sum < 0.3 * total_launches:
+                        impact *= 0.7
+                        event_details["sequence_factor"] = "recent_product_failure_penalty"
 
                 # AI: Deterministic success tracking
                 successful_product_launches.append(1 if impact > 0 else 0)
 
             elif event_type == "Earnings_Report":
-                # AI: Earnings surprise cycles between -0.2 and 0.2
+                # AI: Earnings surprise cycles between -0.2 and 0.2 - no division needed
                 event_value = 0.2 * np.sin(day * 0.25)
                 impact = event_config["base_impact"] * (1 + event_value * 5)
                 event_details = {"type": event_type, "value": event_value, "impact": impact}
@@ -121,8 +138,8 @@ def generate_deterministic_stock_data(num_days: DayNumber = 250, initial_price: 
                             event_details["sequence_factor"] = "earnings_momentum_reversal"
 
             elif event_type == "Competitor_Action":
-                # AI: Severity cycles deterministically
-                event_value = (np.sin(day * 0.3) + 1) / 2  # 0 to 1
+                # AI: Severity - avoid division, use direct scaling
+                event_value = np.sin(day * 0.3) * 0.5 + 0.5  # Range [0, 1]
                 impact = event_config["base_impact"] * (1 + event_value * 2)
                 event_details = {"type": event_type, "value": event_value, "impact": impact}
 
@@ -139,7 +156,7 @@ def generate_deterministic_stock_data(num_days: DayNumber = 250, initial_price: 
             event_details["day"] = day
             event_log.append(event_details)
 
-        # AI: Deterministic price calculation with floor
+        # AI: Deterministic price calculation with floor - no division
         new_price: PriceValue = max(10.0, current_price + daily_change)
         prices.append(new_price)
 
