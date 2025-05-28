@@ -20,3 +20,9 @@ This data should have the property where
 
 The purpose of this library is to build a library which can easily create a model which can fit data with this bi-directional relationship.
 This is meant to generate data which will have lower performance for using a combination of models which do not see the interactions between the sequence and event data.
+
+
+
+when creating plots for model performance,
+you should plot the training and validation performance at each time step to watch for overfitting. 
+
