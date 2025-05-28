@@ -6,4 +6,17 @@ Give me python code which cannot be modelled easily by either system, 1 simple v
 Make the example about stock price.
 
 
+This data should have the property where
 
+  Sequence data, 
+  for example 
+  [Product_Launch, CEO_Change, Earnings_Report, Competitor_Action, Product_Launch, ...],
+  after being trained on will not generalised to validation data.
+  This will be because sequence data is dependent on data inside each event in the sequence.
+
+  And in the other way.
+  Event data will not be able to be predicted accuratly without seqeunce data.
+
+
+The purpose of this library is to build a library which can easily create a model which can fit data with this bi-directional relationship.
+This is meant to generate data which will have lower performance for using a combination of models which do not see the interactions between the sequence and event data.
