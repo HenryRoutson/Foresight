@@ -1,6 +1,0 @@
-
-TODO need to make sure this isn't simple to just use basic analysis to discover
-ie can't just look at a simple line graph and see look here. needs to interfere with multiple variables and also use the attention mechanism of a tranformer.
-
-
-TODO i did a medical example and this had causal dependencies, i need to understand how my model is different to the medical example
