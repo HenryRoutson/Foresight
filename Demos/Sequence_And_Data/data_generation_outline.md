@@ -47,15 +47,15 @@ We can then use python to generate a state transition matrix, for example ...
 
 ```Python
 State     :                       →1 (A)             →2 (B {False})    →3 (B {True})
-Sequence 0: [A, A]                0.900              0.050              0.050
-Sequence 1: [A, B{False}]         0.050              0.900              0.050
-Sequence 2: [A, B{True}]          0.050              0.050              0.900
-Sequence 3: [B{False}, A]         0.900              0.050              0.050
-Sequence 4: [B{False}, B{False}]  0.900              0.050              0.050
-Sequence 5: [B{False}, B{True}]   0.050              0.900              0.050
-Sequence 6: [B{True}, A]          0.050              0.050              0.900
-Sequence 7: [B{True}, B{False}]   0.050              0.900              0.050
-Sequence 8: [B{True}, B{True}]    0.050              0.050              0.900
+Sequence 0: [A, A]                1.000              0.000              0.000
+Sequence 1: [A, B{False}]         0.000              1.000              0.000
+Sequence 2: [A, B{True}]          0.000              0.000              1.000
+Sequence 3: [B{False}, A]         1.000              0.000              0.000
+Sequence 4: [B{False}, B{False}]  1.000              0.000              0.000
+Sequence 5: [B{False}, B{True}]   0.000              1.000              0.000
+Sequence 6: [B{True}, A]          0.000              0.000              1.000
+Sequence 7: [B{True}, B{False}]   0.000              1.000              0.000
+Sequence 8: [B{True}, B{True}]    0.000              0.000              1.000
 ```
 
 with xxx replaced with numerical values where each row adds to one so that each sequence samples with each of the new states having the associated probability.
@@ -72,6 +72,11 @@ From the above graph we can see that a good model will predict the following for
 [B{True}, A] > B {True}
 [B{True}, B{False}] > B {False}
 [B{True}, B{True}] > B {True}
+
+Given this is deterministic, 
+we should expect 100% accuracy
+
+
 ```
 
 
@@ -98,13 +103,19 @@ which simplifies to
 [B, B] > (1/4 A, 3/4 B)
 
 
-Where there is clearly more uncertianty about what to predict next
+Where there is clearly more uncertianty about what to predict next.
+
+
+We should expect 
+1/4 * 1 +
+1/4 * 1 +
+1/4 * (1/2) +
+1/4 * (3/4) 
+= 0.8125
+= 81% accuracy
 
 ```
 
-
-
-TODO because in the non - internal data model we don't predict the interal state this actually makes it much easier 
 
 
 

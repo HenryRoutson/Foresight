@@ -1,7 +1,13 @@
 
 
-Update mistake in data generation . py
-You can make data predictable note in md
+
+
+can you make the trantion matrix deterministic, 
+can you make the context length of the transformers 2 ?
+can you make a bunch of sequences with different inital states?
+
+
+
 
 
 
