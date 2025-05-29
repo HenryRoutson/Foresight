@@ -1,5 +1,9 @@
 
 
+Update mistake in data generation . py
+You can make data predictable note in md
+
+
 
 Need to demoonstate how transfer learning is important
 

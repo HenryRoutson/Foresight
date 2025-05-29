@@ -14,6 +14,7 @@ This corresponds to 3 states.
 
 
 ```
+STATES:
 A         -> 0
 B {False} -> 1
 B {True}  -> 2
@@ -24,9 +25,11 @@ B {True}  -> 2
 To involve attention and sequence data, we will look at all combinations of two events.
 For this the context length only needs to see the last two outcomes.
 
-There are now 9 states
+There are now 9 sequences
 
 ```
+SEQUENCES
+
 0 0 > [A, A]
 0 1 > [A, B {False}]
 0 2 > [A, b {True}]
@@ -43,23 +46,40 @@ There are now 9 states
 We can then use python to generate a state transition matrix, for example ...
 
 ```Python
-                                  →0     →1     →2     →3     →4     →5     →6     →7     →8
-State 0: [A, A]                0.006  0.001  0.006  0.005  0.004  0.001  0.970  0.004  0.003
-State 1: [A, B{False}]         0.006  0.000  0.009  0.007  0.002  0.002  0.002  0.970  0.003
-State 2: [A, B{True}]          0.000  0.000  0.007  0.005  0.001  0.970  0.013  0.003  0.001
-State 3: [B{False}, A]         0.002  0.006  0.970  0.003  0.005  0.004  0.003  0.000  0.006
-State 4: [B{False}, B{False}]  0.004  0.970  0.000  0.002  0.002  0.006  0.006  0.008  0.002
-State 5: [B{False}, B{True}]   0.970  0.002  0.005  0.002  0.004  0.004  0.001  0.007  0.005
-State 6: [B{True}, A]          0.002  0.970  0.005  0.004  0.002  0.003  0.003  0.005  0.005
-State 7: [B{True}, B{False}]   0.005  0.970  0.005  0.008  0.005  0.002  0.003  0.001  0.000
-State 8: [B{True}, B{True}]    0.006  0.001  0.000  0.006  0.005  0.005  0.006  0.001  0.970
+State     :                       →1 (A)             →2 (B {False})    →3 (B {True})
+Sequence 0: [A, A]                0.900              0.050              0.050
+Sequence 1: [A, B{False}]         0.050              0.900              0.050
+Sequence 2: [A, B{True}]          0.050              0.050              0.900
+Sequence 3: [B{False}, A]         0.900              0.050              0.050
+Sequence 4: [B{False}, B{False}]  0.900              0.050              0.050
+Sequence 5: [B{False}, B{True}]   0.050              0.900              0.050
+Sequence 6: [B{True}, A]          0.050              0.050              0.900
+Sequence 7: [B{True}, B{False}]   0.050              0.900              0.050
+Sequence 8: [B{True}, B{True}]    0.050              0.050              0.900
 ```
 
+with xxx replaced with numerical values where each row adds to one so that each sequence samples with each of the new states having the associated probability.
+
+From the above graph we can see that the model will predict for the next state in the seqeunce  ... 
+
+```
+[A, A] > A
+[A, B{False}] > B {False}
+[A, B{True}] > B {True}
+[B{False}, A] > A
+[B{False}, B{False}] > A
+[B{False}, B{True}] > B {False}
+[B{True}, A] > B {True}
+[B{True}, B{False}] > B {False}
+[B{True}, B{True}] > B {True}
+```
 
 ## Summary
 
 Using this method we can create sequences which 
   - are largely predictable but not memorisable
+  TODO is this memorisable if the context length is 2?? 
+
   - involve both sequence (A and B) and event data (such as B {False})
   - very simple to understand
 
