@@ -60,7 +60,7 @@ Sequence 8: [B{True}, B{True}]    0.050              0.050              0.900
 
 with xxx replaced with numerical values where each row adds to one so that each sequence samples with each of the new states having the associated probability.
 
-From the above graph we can see that the model will predict for the next state in the seqeunce  ... 
+From the above graph we can see that a good model will predict the following for the next state in the seqeunce  ... 
 
 ```
 [A, A] > A
@@ -74,12 +74,44 @@ From the above graph we can see that the model will predict for the next state i
 [B{True}, B{True}] > B {True}
 ```
 
+
+However if we don't have internal data of events ... 
+
+
+```
+[A, A] > A
+[A, B] > B
+[A, B] > B
+[B, A] > A
+[B, B] > A
+[B, B] > B
+[B, A] > B
+[B, B] > B
+[B, B] > B 
+
+
+which simplifies to 
+
+[A, A] > A
+[A, B] > B
+[B, A] > (1/2 A, 1/2 B)
+[B, B] > (1/4 A, 3/4 B)
+
+
+Where there is clearly more uncertianty about what to predict next
+
+```
+
+
+
+TODO because in the non - internal data model we don't predict the interal state this actually makes it much easier 
+
+
+
+
 ## Summary
 
 Using this method we can create sequences which 
-  - are largely predictable but not memorisable
-  TODO is this memorisable if the context length is 2?? 
-
   - involve both sequence (A and B) and event data (such as B {False})
   - very simple to understand
 
