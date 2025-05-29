@@ -31,8 +31,9 @@ def generate_transition_matrix(size: int = 9, dominant_prob: float = 0.97) -> np
 
 # AI: Generate sequences using the transition matrix
 def generate_sequence(transition_matrix: np.ndarray[Any, np.dtype[np.float64]], 
-                      sequence_length: int = 1000000, # need to make enough data to generalize
-                      initial_state: int = 0) -> List[int]:
+                      sequence_length: int,
+                      initial_state: int = 0
+                      ) -> List[int]:
     """Generate sequences using the transition matrix."""
 
     sequence = [initial_state]
@@ -106,11 +107,11 @@ def print_sequence(sequence: List[int]) -> None:
 
 
 
-def generate_data_for_sequence_and_data() -> List[int]:
+def generate_data_for_sequence_and_data(sequence_length: int = 1000) -> List[int]:
     """Generate a random sequence."""
     transition_matrix: np.ndarray[Any, np.dtype[np.float64]] = generate_transition_matrix()
     print_matrix_info(transition_matrix)
-    sequence = generate_sequence(transition_matrix)
+    sequence = generate_sequence(transition_matrix, sequence_length=sequence_length)
     print_sequence(sequence)
     return sequence
 
@@ -120,6 +121,6 @@ def generate_data_for_sequence_and_data() -> List[int]:
 if __name__ == "__main__":
     # AI: Generate and display the transition matrix
     np.random.seed(42)  # For reproducible results
-    generate_data_for_sequence_and_data()
+    generate_data_for_sequence_and_data(sequence_length=100)
 
     
