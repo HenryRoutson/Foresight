@@ -116,7 +116,3 @@ if __name__ == "__main__":
     # AI: Generate sequences using the transition matrix
     sequence = generate_sequence(transition_matrix)
     print_sequence(sequence)
-    
-    # AI: Save sequences to file
-    np.save("generated_sequence.npy", np.array(sequence, dtype=object))
-    print(f"\nSequence saved to 'generated_sequence.npy'") 
