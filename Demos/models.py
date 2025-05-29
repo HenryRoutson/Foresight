@@ -6,36 +6,28 @@ from typing import List, Tuple, Dict, Any
 from Sequence_And_Data.data_generation import generate_data_for_sequence_and_data
 
 # AI: Define types for clarity
-state_sequence = List[int]
+event_sequence = List[int]  # Sequence of events (0=A, 1=B{False}, 2=B{True})
 probability_vector = torch.Tensor
 prediction_output = Dict[str, Any]
 
-def create_collapsed_mapping(sequence_data: state_sequence) -> Tuple[state_sequence, Dict[int, int]]:
+def create_collapsed_mapping(sequence_data: event_sequence) -> Tuple[event_sequence, Dict[int, int]]:
     """
-    AI: Create collapsed state mapping where B{True} and B{False} are indistinguishable
-    Original states:
-    0: [A, A], 1: [A, B{False}], 2: [A, B{True}], 3: [B{False}, A], 
-    4: [B{False}, B{False}], 5: [B{False}, B{True}], 6: [B{True}, A], 
-    7: [B{True}, B{False}], 8: [B{True}, B{True}]
+    AI: Create collapsed event mapping where B{True} and B{False} are indistinguishable
+    Original events:
+    0: A, 1: B{False}, 2: B{True}
     
-    Collapsed states (B{True} and B{False} -> B):
-    0: [A, A], 1: [A, B], 2: [B, A], 3: [B, B]
+    Collapsed events (B{True} and B{False} -> B):
+    0: A, 1: B
     """
-    # AI: Define the mapping from original states to collapsed states
+    # AI: Define the mapping from original events to collapsed events
     original_to_collapsed = {
-        0: 0,  # [A, A] -> [A, A]
-        1: 1,  # [A, B{False}] -> [A, B]  
-        2: 1,  # [A, B{True}] -> [A, B]
-        3: 2,  # [B{False}, A] -> [B, A]
-        4: 3,  # [B{False}, B{False}] -> [B, B]
-        5: 3,  # [B{False}, B{True}] -> [B, B]
-        6: 2,  # [B{True}, A] -> [B, A]
-        7: 3,  # [B{True}, B{False}] -> [B, B]
-        8: 3,  # [B{True}, B{True}] -> [B, B]
+        0: 0,  # A -> A
+        1: 1,  # B{False} -> B  
+        2: 1,  # B{True} -> B
     }
     
     # AI: Apply mapping to sequence
-    collapsed_sequence = [original_to_collapsed[state] for state in sequence_data]
+    collapsed_sequence = [original_to_collapsed[event] for event in sequence_data]
     
     return collapsed_sequence, original_to_collapsed
 
@@ -46,11 +38,11 @@ class MultiOutcomeTransformer(nn.Module):
     """
     
     def __init__(self, 
-                 vocab_size: int = 9,  # AI: 9 states from data generation
-                 d_model: int = 64,    # AI: Smaller for faster training
-                 nhead: int = 4,       # AI: Fewer heads for faster training
-                 num_layers: int = 2,  # AI: Fewer layers for faster training
-                 sequence_length: int = 4,  # AI: Context window of 4 as requested
+                 vocab_size: int = 3,     # AI: 3 events: A, B{False}, B{True}
+                 d_model: int = 64,       # AI: Smaller for faster training
+                 nhead: int = 4,          # AI: Fewer heads for faster training
+                 num_layers: int = 2,     # AI: Fewer layers for faster training
+                 sequence_length: int = 4, # AI: Context window of 4 as requested
                  dropout: float = 0.1):
         super().__init__()
         
@@ -59,7 +51,7 @@ class MultiOutcomeTransformer(nn.Module):
         self.sequence_length = sequence_length
         self.vocab_size = vocab_size
         
-        # AI: Embedding layer for state tokens
+        # AI: Embedding layer for event tokens
         self.embedding = nn.Embedding(vocab_size, d_model)
         
         # AI: Positional encoding
@@ -84,7 +76,7 @@ class MultiOutcomeTransformer(nn.Module):
         x: (batch_size, sequence_length) tensor of token indices
         returns: (batch_size, vocab_size) logits for next token
         """
-        batch_size, seq_len = x.shape
+        seq_len = x.shape[1]
         
         # AI: Embed tokens
         embedded = self.embedding(x) * (self.d_model ** 0.5)
@@ -103,11 +95,11 @@ class MultiOutcomeTransformer(nn.Module):
         
         return logits
 
-def create_sequences_dataset(sequence_data: state_sequence, 
+def create_sequences_dataset(sequence_data: event_sequence, 
                            context_length: int = 4) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    AI: Create input-target pairs from sequence data
-    Each input is context_length tokens, target is the next token
+    AI: Create input-target pairs from event sequence data
+    Each input is context_length events, target is the next event
     """
     if len(sequence_data) < context_length + 1:
         raise ValueError(f"Sequence too short: {len(sequence_data)} < {context_length + 1}")
@@ -259,7 +251,7 @@ def train_model(model: MultiOutcomeTransformer,
 def evaluate_predictions(model: MultiOutcomeTransformer, 
                         val_inputs: torch.Tensor,
                         val_targets: torch.Tensor,
-                        state_labels: List[str],
+                        event_labels: List[str],
                         model_name: str = "Model",
                         context_length: int = 4,
                         num_examples: int = 10) -> float:
@@ -300,13 +292,13 @@ def evaluate_predictions(model: MultiOutcomeTransformer,
             predicted = predictions[i].item()
             confidence = probabilities[i, predicted].item()
             
-            context_labels = [state_labels[idx] for idx in context]
+            context_labels = [event_labels[idx] for idx in context]
             is_correct = "✓" if predicted == true_next else "✗"
             
             print(f"Example {i+1:2d}: {context} -> {true_next}")
             print(f"           Context: {' -> '.join(context_labels)}")
-            print(f"           True next: {state_labels[true_next]}")
-            print(f"           Predicted: {state_labels[predicted]} (conf: {confidence:.3f}) {is_correct}")
+            print(f"           True next: {event_labels[true_next]}")
+            print(f"           Predicted: {event_labels[predicted]} (conf: {confidence:.3f}) {is_correct}")
             print()
     
     return accuracy
@@ -320,17 +312,17 @@ def compare_models_with_and_without_internal_data():
     print("Comparing models WITH and WITHOUT access to internal B state information")
     print("=" * 80)
     
-    # AI: Generate original sequence data
-    print("Generating sequence data...")
+    # AI: Generate original event sequence data
+    print("Generating event sequence data...")
     original_sequence = generate_data_for_sequence_and_data(sequence_length=5000)
     
     # AI: Create collapsed sequence (B{True} and B{False} become indistinguishable)
     print("Creating collapsed sequence (removing internal B state information)...")
     collapsed_sequence, mapping = create_collapsed_mapping(original_sequence)
     
-    print(f"Original vocabulary size: 9 states")
-    print(f"Collapsed vocabulary size: 4 states")
-    print(f"State mapping: {mapping}")
+    print(f"Original vocabulary size: 3 events (A, B{{False}}, B{{True}})")
+    print(f"Collapsed vocabulary size: 2 events (A, B)")
+    print(f"Event mapping: {mapping}")
     
     # AI: Create datasets for both versions
     context_length = 4
@@ -364,9 +356,9 @@ def compare_models_with_and_without_internal_data():
     # AI: Initialize models
     print(f"\nInitializing models...")
     
-    # Model with full state information
+    # Model with full event information
     model_with_data = MultiOutcomeTransformer(
-        vocab_size=9,  # Original 9 states
+        vocab_size=3,  # Original 3 events
         d_model=64,
         nhead=4,
         num_layers=2,
@@ -376,7 +368,7 @@ def compare_models_with_and_without_internal_data():
     
     # Model without internal state information
     model_without_data = MultiOutcomeTransformer(
-        vocab_size=4,  # Collapsed 4 states
+        vocab_size=2,  # Collapsed 2 events
         d_model=64,
         nhead=4,
         num_layers=2,
@@ -389,7 +381,7 @@ def compare_models_with_and_without_internal_data():
     print("TRAINING MODEL WITH INTERNAL DATA (B{True} vs B{False} distinguishable)")
     print("="*80)
     
-    with_data_losses, with_data_accuracies = train_model(
+    train_model(
         model_with_data,
         orig_train_inputs,
         orig_train_targets, 
@@ -406,7 +398,7 @@ def compare_models_with_and_without_internal_data():
     print("TRAINING MODEL WITHOUT INTERNAL DATA (B{True} and B{False} indistinguishable)")  
     print("="*80)
     
-    without_data_losses, without_data_accuracies = train_model(
+    train_model(
         model_without_data,
         coll_train_inputs,
         coll_train_targets,
@@ -419,32 +411,16 @@ def compare_models_with_and_without_internal_data():
         verbose=True
     )
     
-    # AI: Define state labels for evaluation
-    original_state_labels = [
-        "[A, A]",           # 0
-        "[A, B{False}]",    # 1  
-        "[A, B{True}]",     # 2
-        "[B{False}, A]",    # 3
-        "[B{False}, B{False}]", # 4
-        "[B{False}, B{True}]",  # 5
-        "[B{True}, A]",     # 6
-        "[B{True}, B{False}]",  # 7
-        "[B{True}, B{True}]"    # 8
-    ]
-    
-    collapsed_state_labels = [
-        "[A, A]",    # 0
-        "[A, B]",    # 1
-        "[B, A]",    # 2  
-        "[B, B]"     # 3
-    ]
+    # AI: Define event labels for evaluation
+    original_event_labels = ["A", "B{False}", "B{True}"]
+    collapsed_event_labels = ["A", "B"]
     
     # AI: Evaluate both models
     with_data_acc = evaluate_predictions(
         model_with_data, 
         orig_val_inputs, 
         orig_val_targets,
-        original_state_labels,
+        original_event_labels,
         "WITH Internal Data",
         context_length
     )
@@ -453,7 +429,7 @@ def compare_models_with_and_without_internal_data():
         model_without_data,
         coll_val_inputs,
         coll_val_targets, 
-        collapsed_state_labels,
+        collapsed_event_labels,
         "WITHOUT Internal Data",
         context_length
     )
