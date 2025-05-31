@@ -75,6 +75,9 @@ From the above graph we can see that a good model will predict the following for
 
 Given this is deterministic, 
 we should expect 100% accuracy
+when predicting both sequence and data
+(IE [A, B{True}, B{True}, B{True}])
+
 
 
 ```
@@ -113,6 +116,7 @@ We should expect
 1/4 * (3/4) 
 = 0.8125
 = 81% accuracy
+when predicting seqeunce (IE [A,B,B,A]) only
 
 ```
 
