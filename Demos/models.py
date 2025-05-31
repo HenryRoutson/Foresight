@@ -42,7 +42,7 @@ class MultiOutcomeTransformer(nn.Module):
                  d_model: int = 64,       # AI: Smaller for faster training
                  nhead: int = 4,          # AI: Fewer heads for faster training
                  num_layers: int = 2,     # AI: Fewer layers for faster training
-                 sequence_length: int = 4, # AI: Context window of 4 as requested
+                 sequence_length: int = 2, # AI: Context window of 2 as requested
                  dropout: float = 0.1):
         super().__init__()
         
@@ -277,20 +277,50 @@ def evaluate_predictions(model: MultiOutcomeTransformer,
     print(f"Overall Validation Accuracy: {correct}/{total} = {accuracy:.2f}%")
     print()
     
-    # AI: Show detailed examples
-    print(f"Sample Predictions (showing {num_examples} examples):")
+    # AI: Show diverse examples by finding unique sequence patterns
+    print(f"Sample Predictions (showing diverse examples):")
     print("-" * 70)
     
     with torch.no_grad():
-        outputs = model(val_inputs[:num_examples])
+        # AI: Find unique sequence patterns to show diverse examples
+        unique_patterns = {}
+        pattern_indices = []
+        
+        for i in range(len(val_inputs)):
+            # AI: Convert input to tuple to use as dictionary key
+            pattern = tuple(val_inputs[i].tolist())
+            target = val_targets[i].item()
+            pattern_key = (pattern, target)
+            
+            if pattern_key not in unique_patterns and len(pattern_indices) < num_examples:
+                unique_patterns[pattern_key] = i
+                pattern_indices.append(i)
+        
+        # AI: If we don't have enough unique patterns, fill with random samples
+        if len(pattern_indices) < num_examples:
+            remaining_indices = list(range(len(val_inputs)))
+            # AI: Remove already selected indices
+            for idx in pattern_indices:
+                if idx in remaining_indices:
+                    remaining_indices.remove(idx)
+            
+            # AI: Sample remaining examples randomly
+            import random
+            random.shuffle(remaining_indices)
+            pattern_indices.extend(remaining_indices[:num_examples - len(pattern_indices)])
+        
+        # AI: Get outputs for selected examples
+        selected_inputs = val_inputs[pattern_indices]
+        selected_targets = val_targets[pattern_indices]
+        outputs = model(selected_inputs)
         probabilities = F.softmax(outputs, dim=-1)
         predictions = torch.argmax(outputs, dim=-1)
         
-        for i in range(num_examples):
-            context = val_inputs[i].tolist()
-            true_next = val_targets[i].item()
-            predicted = predictions[i].item()
-            confidence = probabilities[i, predicted].item()
+        for i, original_idx in enumerate(pattern_indices):
+            context = selected_inputs[i].tolist()
+            true_next = int(selected_targets[i].item())
+            predicted = int(predictions[i].item())
+            confidence = float(probabilities[i, predicted].item())
             
             context_labels = [event_labels[idx] for idx in context]
             is_correct = "✓" if predicted == true_next else "✗"
@@ -306,149 +336,199 @@ def evaluate_predictions(model: MultiOutcomeTransformer,
 def compare_models_with_and_without_internal_data():
     """
     AI: Main comparison function demonstrating the importance of internal data
+    Run multiple experiments to test consistency
     """
     print("Multi-Outcome Sequence Prediction: Internal Data Importance Demo")
     print("=" * 80)
-    print("Comparing models WITH and WITHOUT access to internal B state information")
+    print("Running 3 experiments with different random seeds to test consistency")
     print("=" * 80)
     
-    # AI: Generate original event sequence data
-    print("Generating event sequence data...")
-    original_sequence = generate_data_for_sequence_and_data(sequence_length=5000)
+    # AI: Store results from all experiments
+    all_results = []
     
-    # AI: Create collapsed sequence (B{True} and B{False} become indistinguishable)
-    print("Creating collapsed sequence (removing internal B state information)...")
-    collapsed_sequence, mapping = create_collapsed_mapping(original_sequence)
+    for experiment in range(1, 4):
+        print(f"\n" + "="*80)
+        print(f"EXPERIMENT {experiment}/3")
+        print("="*80)
+        
+        # AI: Set different random seed for each experiment
+        import torch
+        import numpy as np
+        torch.manual_seed(42 + experiment * 100)
+        np.random.seed(42 + experiment * 100)
+        
+        # AI: Generate original event sequence data
+        print("Generating event sequence data...")
+        original_sequence = generate_data_for_sequence_and_data(sequence_length=5000)
+        
+        # AI: Create collapsed sequence (B{True} and B{False} become indistinguishable)
+        print("Creating collapsed sequence (removing internal B state information)...")
+        collapsed_sequence, mapping = create_collapsed_mapping(original_sequence)
+        
+        print(f"Original vocabulary size: 3 events (A, B{{False}}, B{{True}})")
+        print(f"Collapsed vocabulary size: 2 events (A, B)")
+        
+        # AI: Create datasets for both versions
+        context_length = 2
+        
+        # Original data (with internal state info)
+        original_inputs, original_targets = create_sequences_dataset(original_sequence, context_length)
+        print(f"\nOriginal dataset: {len(original_inputs)} samples")
+        
+        # Collapsed data (without internal state info)  
+        collapsed_inputs, collapsed_targets = create_sequences_dataset(collapsed_sequence, context_length)
+        print(f"Collapsed dataset: {len(collapsed_inputs)} samples")
+        
+        # AI: Split both datasets
+        train_size = int(0.8 * len(original_inputs))
+        
+        # Original splits
+        orig_train_inputs = original_inputs[:train_size]
+        orig_train_targets = original_targets[:train_size]
+        orig_val_inputs = original_inputs[train_size:]
+        orig_val_targets = original_targets[train_size:]
+        
+        # Collapsed splits
+        coll_train_inputs = collapsed_inputs[:train_size]
+        coll_train_targets = collapsed_targets[:train_size]
+        coll_val_inputs = collapsed_inputs[train_size:]
+        coll_val_targets = collapsed_targets[train_size:]
+        
+        print(f"Training samples: {train_size}")
+        print(f"Validation samples: {len(orig_val_inputs)}")
+        
+        # AI: Initialize models
+        print(f"\nInitializing models...")
+        
+        # Model with full event information
+        model_with_data = MultiOutcomeTransformer(
+            vocab_size=3,  # Original 3 events
+            d_model=64,
+            nhead=4,
+            num_layers=2,
+            sequence_length=context_length,
+            dropout=0.1
+        )
+        
+        # Model without internal state information
+        model_without_data = MultiOutcomeTransformer(
+            vocab_size=2,  # Collapsed 2 events
+            d_model=64,
+            nhead=4,
+            num_layers=2,
+            sequence_length=context_length,
+            dropout=0.1
+        )
+        
+        # AI: Train both models
+        print(f"\nTraining WITH internal data model...")
+        
+        train_model(
+            model_with_data,
+            orig_train_inputs,
+            orig_train_targets, 
+            orig_val_inputs,
+            orig_val_targets,
+            model_name=f"Exp{experiment}-WITH Internal Data",
+            epochs=50,  # AI: More epochs for better convergence
+            batch_size=128,
+            learning_rate=0.001,
+            verbose=False  # AI: Reduce verbosity for multiple runs
+        )
+        
+        print(f"\nTraining WITHOUT internal data model...")
+        
+        train_model(
+            model_without_data,
+            coll_train_inputs,
+            coll_train_targets,
+            coll_val_inputs, 
+            coll_val_targets,
+            model_name=f"Exp{experiment}-WITHOUT Internal Data",
+            epochs=50,  # AI: More epochs for better convergence
+            batch_size=128,
+            learning_rate=0.001,
+            verbose=False  # AI: Reduce verbosity for multiple runs
+        )
+        
+        # AI: Define event labels for evaluation
+        original_event_labels = ["A", "B{False}", "B{True}"]
+        collapsed_event_labels = ["A", "B"]
+        
+        # AI: Evaluate both models
+        with_data_acc = evaluate_predictions(
+            model_with_data, 
+            orig_val_inputs, 
+            orig_val_targets,
+            original_event_labels,
+            f"Exp{experiment}-WITH Internal Data",
+            context_length,
+            num_examples=5  # AI: Fewer examples for multiple runs
+        )
+        
+        without_data_acc = evaluate_predictions(
+            model_without_data,
+            coll_val_inputs,
+            coll_val_targets, 
+            collapsed_event_labels,
+            f"Exp{experiment}-WITHOUT Internal Data",
+            context_length,
+            num_examples=5  # AI: Fewer examples for multiple runs
+        )
+        
+        # AI: Store results
+        result = {
+            'experiment': experiment,
+            'with_data_acc': with_data_acc,
+            'without_data_acc': without_data_acc,
+            'difference': with_data_acc - without_data_acc
+        }
+        all_results.append(result)
+        
+        print(f"\nEXPERIMENT {experiment} RESULTS:")
+        print(f"  WITH internal data:    {with_data_acc:.1f}%")
+        print(f"  WITHOUT internal data: {without_data_acc:.1f}%")
+        print(f"  Difference:            {with_data_acc - without_data_acc:.1f} percentage points")
     
-    print(f"Original vocabulary size: 3 events (A, B{{False}}, B{{True}})")
-    print(f"Collapsed vocabulary size: 2 events (A, B)")
-    print(f"Event mapping: {mapping}")
-    
-    # AI: Create datasets for both versions
-    context_length = 4
-    
-    # Original data (with internal state info)
-    original_inputs, original_targets = create_sequences_dataset(original_sequence, context_length)
-    print(f"\nOriginal dataset: {len(original_inputs)} samples")
-    
-    # Collapsed data (without internal state info)  
-    collapsed_inputs, collapsed_targets = create_sequences_dataset(collapsed_sequence, context_length)
-    print(f"Collapsed dataset: {len(collapsed_inputs)} samples")
-    
-    # AI: Split both datasets
-    train_size = int(0.8 * len(original_inputs))
-    
-    # Original splits
-    orig_train_inputs = original_inputs[:train_size]
-    orig_train_targets = original_targets[:train_size]
-    orig_val_inputs = original_inputs[train_size:]
-    orig_val_targets = original_targets[train_size:]
-    
-    # Collapsed splits
-    coll_train_inputs = collapsed_inputs[:train_size]
-    coll_train_targets = collapsed_targets[:train_size]
-    coll_val_inputs = collapsed_inputs[train_size:]
-    coll_val_targets = collapsed_targets[train_size:]
-    
-    print(f"Training samples: {train_size}")
-    print(f"Validation samples: {len(orig_val_inputs)}")
-    
-    # AI: Initialize models
-    print(f"\nInitializing models...")
-    
-    # Model with full event information
-    model_with_data = MultiOutcomeTransformer(
-        vocab_size=3,  # Original 3 events
-        d_model=64,
-        nhead=4,
-        num_layers=2,
-        sequence_length=context_length,
-        dropout=0.1
-    )
-    
-    # Model without internal state information
-    model_without_data = MultiOutcomeTransformer(
-        vocab_size=2,  # Collapsed 2 events
-        d_model=64,
-        nhead=4,
-        num_layers=2,
-        sequence_length=context_length,
-        dropout=0.1
-    )
-    
-    # AI: Train both models
-    print(f"\n" + "="*80)
-    print("TRAINING MODEL WITH INTERNAL DATA (B{True} vs B{False} distinguishable)")
-    print("="*80)
-    
-    train_model(
-        model_with_data,
-        orig_train_inputs,
-        orig_train_targets, 
-        orig_val_inputs,
-        orig_val_targets,
-        model_name="WITH Internal Data",
-        epochs=30,  # Fewer epochs for demo
-        batch_size=128,
-        learning_rate=0.001,
-        verbose=True
-    )
-    
-    print(f"\n" + "="*80)
-    print("TRAINING MODEL WITHOUT INTERNAL DATA (B{True} and B{False} indistinguishable)")  
-    print("="*80)
-    
-    train_model(
-        model_without_data,
-        coll_train_inputs,
-        coll_train_targets,
-        coll_val_inputs, 
-        coll_val_targets,
-        model_name="WITHOUT Internal Data",
-        epochs=30,  # Fewer epochs for demo
-        batch_size=128,
-        learning_rate=0.001,
-        verbose=True
-    )
-    
-    # AI: Define event labels for evaluation
-    original_event_labels = ["A", "B{False}", "B{True}"]
-    collapsed_event_labels = ["A", "B"]
-    
-    # AI: Evaluate both models
-    with_data_acc = evaluate_predictions(
-        model_with_data, 
-        orig_val_inputs, 
-        orig_val_targets,
-        original_event_labels,
-        "WITH Internal Data",
-        context_length
-    )
-    
-    without_data_acc = evaluate_predictions(
-        model_without_data,
-        coll_val_inputs,
-        coll_val_targets, 
-        collapsed_event_labels,
-        "WITHOUT Internal Data",
-        context_length
-    )
-    
-    # AI: Final comparison
+    # AI: Summary of all experiments
     print("\n" + "="*80)
-    print("FINAL COMPARISON: IMPACT OF INTERNAL DATA ON ACCURACY")
+    print("SUMMARY: ALL EXPERIMENT RESULTS")
     print("="*80)
-    print(f"Model WITH internal data (B{{True}} vs B{{False}}):    {with_data_acc:.1f}%")
-    print(f"Model WITHOUT internal data (B only):               {without_data_acc:.1f}%")
-    print(f"Accuracy difference:                                {with_data_acc - without_data_acc:.1f} percentage points")
+    print("Expected based on theory:")
+    print("  WITH internal data:    ~100% (deterministic)")
+    print("  WITHOUT internal data: ~81% (uncertain due to collapsed B states)")
+    print("  Expected difference:   ~19 percentage points")
+    print()
+    print("Actual results:")
     
-    if with_data_acc > without_data_acc:
-        print(f"\n✓ CONCLUSION: Internal structured data improves prediction accuracy!")
-        print(f"✓ The {with_data_acc - without_data_acc:.1f}% improvement demonstrates the value of modeling")
-        print(f"  complete event structures rather than just event types.")
+    for result in all_results:
+        exp = result['experiment']
+        with_acc = result['with_data_acc']
+        without_acc = result['without_data_acc']
+        diff = result['difference']
+        print(f"  Experiment {exp}: WITH={with_acc:.1f}%, WITHOUT={without_acc:.1f}%, DIFF={diff:.1f}pp")
+    
+    # AI: Calculate averages
+    avg_with = sum(r['with_data_acc'] for r in all_results) / len(all_results)
+    avg_without = sum(r['without_data_acc'] for r in all_results) / len(all_results)
+    avg_diff = sum(r['difference'] for r in all_results) / len(all_results)
+    
+    print(f"\nAverages across all experiments:")
+    print(f"  WITH internal data:    {avg_with:.1f}%")
+    print(f"  WITHOUT internal data: {avg_without:.1f}%")
+    print(f"  Difference:            {avg_diff:.1f} percentage points")
+    
+    print(f"\n" + "="*80)
+    print("ANALYSIS:")
+    if avg_without > 90:
+        print("⚠ PROBLEM: Model WITHOUT internal data is achieving >90% accuracy")
+        print("  This is much higher than the theoretical 81% expected from the outline.")
+        print("  This suggests the data generation is not creating enough uncertain scenarios")
+        print("  where the internal state of B is crucial for prediction.")
+    elif avg_diff > 15:
+        print("✓ GOOD: Significant difference between models as expected")
     else:
-        print(f"\n⚠ Unexpected result: No improvement from internal data")
-        print(f"  This might indicate the transition patterns don't depend on B's internal state")
+        print("⚠ ISSUE: Difference is smaller than the theoretical ~19 percentage points")
     
     print(f"\nThis demonstrates why the multi-outcome prediction library models")
     print(f"both sequence patterns AND internal structured data simultaneously.")

@@ -123,6 +123,9 @@ when predicting seqeunce (IE [A,B,B,A]) only
 
 
 
+As a side note you can model this with a state machine.
+
+
 
 ## Summary
 
