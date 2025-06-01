@@ -1,17 +1,33 @@
 
 
+#  --------------------------------------------------------
+
+# F is short for B{False}
+# T is short for B{True}
 
 TRAINING_DATA_WITH_CONTEXT = [
   ["A", "A", "A"],
-  ["A", "B{False}", "B{False}"],
-  ["A", "B{True}", "B{True}"],
-  ["B{False}", "A", "A"],
-  ["B{False}", "B{False}", "A"],
-  ["B{False}", "B{True}", "B{False}"],
-  ["B{True}", "A", "B{True}"],
-  ["B{True}", "B{False}", "B{False}"],
-  ["B{True}", "B{True}", "B{True}"]
+  ["A", "F", "F"],
+  ["A", "T", "T"],
+  ["F", "A", "A"],
+  ["F", "F", "A"],
+  ["F", "T", "F"],
+  ["T", "A", "T"],
+  ["T", "F", "F"],
+  ["T", "T", "T"]
 ]
+
+DATA_WITH_CONTEXT_SET : set[str] = set()
+for data in TRAINING_DATA_WITH_CONTEXT:
+  for x in data :
+    DATA_WITH_CONTEXT_SET.add(x)
+
+assert len(DATA_WITH_CONTEXT_SET) == 3 # A, F, T
+
+
+
+#  --------------------------------------------------------
+
 
 TRAINING_DATA_WITHOUT_CONTEXT = [
   ["A", "A", "A"],
@@ -24,3 +40,17 @@ TRAINING_DATA_WITHOUT_CONTEXT = [
   ["B", "B", "B"],
   ["B", "B", "B"]
 ]
+
+
+DATA_WITHOUT_CONTEXT_SET : set[str] = set()
+for data in TRAINING_DATA_WITHOUT_CONTEXT:
+  for x in data :
+    DATA_WITHOUT_CONTEXT_SET.add(x)
+
+assert len(DATA_WITHOUT_CONTEXT_SET) == 2 # A and B
+
+
+
+#  --------------------------------------------------------
+
+
