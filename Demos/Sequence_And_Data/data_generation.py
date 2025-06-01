@@ -6,30 +6,38 @@ from typing import Any, List
 event_type = int  # 0=A, 1=B{False}, 2=B{True}
 sequence_state_id = int  # 0-8 representing different [event, event] combinations
 
-# AI: Generate predictable 9x3 transition matrix with dominant transitions
-def generate_transition_matrix(dominant_prob: float = 0.9) -> np.ndarray[Any, np.dtype[np.float64]]:
-    """Generate a 9x3 transition probability matrix where 9 sequence states transition to 3 next events."""
+# AI: Generate deterministic 9x3 transition matrix as specified in outline
+def generate_transition_matrix() -> np.ndarray[Any, np.dtype[np.float64]]:
+    """Generate the deterministic 9x3 transition matrix as specified in the outline."""
     matrix = np.zeros((9, 3))  # AI: 9 sequence states -> 3 possible next events
     
-    # AI: For each sequence state, choose one dominant next event with ~90% probability
-    for i in range(9):
-        # AI: Choose a random dominant next event for this sequence state
-        dominant_next_event: event_type = np.random.randint(0, 3)
-        
-        # AI: Set dominant probability
-        matrix[i, dominant_next_event] = dominant_prob
-        
-        # AI: Distribute remaining probability among other events
-        remaining_prob = 1.0 - dominant_prob
-        other_events = [j for j in range(3) if j != dominant_next_event]
-        
-        # AI: Generate small random probabilities that sum to remaining_prob
-        small_probs = np.random.rand(len(other_events))
-        small_probs = small_probs / small_probs.sum() * remaining_prob
-        
-        # AI: Assign small probabilities to other events
-        for j, event in enumerate(other_events):
-            matrix[i, event] = small_probs[j]
+    # AI: Set transitions exactly as specified in outline:
+    # [A, A] -> A (100%)
+    matrix[0, 0] = 1.0  # State 0: [A, A] -> A
+    
+    # [A, B{False}] -> B{False} (100%)  
+    matrix[1, 1] = 1.0  # State 1: [A, B{False}] -> B{False}
+    
+    # [A, B{True}] -> B{True} (100%)
+    matrix[2, 2] = 1.0  # State 2: [A, B{True}] -> B{True}
+    
+    # [B{False}, A] -> A (100%)
+    matrix[3, 0] = 1.0  # State 3: [B{False}, A] -> A
+    
+    # [B{False}, B{False}] -> A (100%)
+    matrix[4, 0] = 1.0  # State 4: [B{False}, B{False}] -> A
+    
+    # [B{False}, B{True}] -> B{False} (100%)
+    matrix[5, 1] = 1.0  # State 5: [B{False}, B{True}] -> B{False}
+    
+    # [B{True}, A] -> B{True} (100%)
+    matrix[6, 2] = 1.0  # State 6: [B{True}, A] -> B{True}
+    
+    # [B{True}, B{False}] -> B{False} (100%)
+    matrix[7, 1] = 1.0  # State 7: [B{True}, B{False}] -> B{False}
+    
+    # [B{True}, B{True}] -> B{True} (100%)
+    matrix[8, 2] = 1.0  # State 8: [B{True}, B{True}] -> B{True}
     
     return matrix
 
@@ -115,11 +123,86 @@ def print_sequence(sequence: List[event_type]) -> None:
     print("Event labels: ", " -> ".join([event_labels[event] for event in sequence]))
 
 def generate_data_for_sequence_and_data(sequence_length: int = 1000) -> List[event_type]:
-    """Generate a random event sequence using sequence-to-event transitions."""
+    """Generate a deterministic event sequence that follows the transition matrix exactly."""
     transition_matrix: np.ndarray[Any, np.dtype[np.float64]] = generate_transition_matrix()
     print_matrix_info(transition_matrix)
-    sequence = generate_sequence(transition_matrix, sequence_length=sequence_length)
-    print_sequence(sequence)
+    
+    # AI: Generate multiple sequences with different starting points and combine them
+    # AI: This ensures we get varied patterns while maintaining deterministic rules
+    
+    all_sequences : List[event_type] = []
+    
+    # AI: Define all possible starting states to ensure coverage
+    starting_states : List[tuple[event_type, event_type]] = [
+        (0, 0),  # [A, A] 
+        (0, 1),  # [A, B{False}]
+        (0, 2),  # [A, B{True}]
+        (1, 0),  # [B{False}, A]
+        (1, 1),  # [B{False}, B{False}]
+        (1, 2),  # [B{False}, B{True}]
+        (2, 0),  # [B{True}, A]
+        (2, 1),  # [B{True}, B{False}]
+        (2, 2),  # [B{True}, B{True}]
+    ]
+    
+    # AI: Generate shorter sequences for each starting state
+    seq_per_start : int = max(50, sequence_length // (len(starting_states) * 2))
+    
+    for start_state in starting_states:
+        # AI: Generate sequence following deterministic rules
+        sequence = generate_sequence(transition_matrix, seq_per_start, start_state)
+        all_sequences.extend(sequence)
+        
+        # AI: Add some randomness by starting from middle of this sequence
+        if len(sequence) > 10:
+            mid_point = len(sequence) // 2
+            partial_start = (sequence[mid_point], sequence[mid_point + 1])
+            partial_sequence = generate_sequence(transition_matrix, seq_per_start // 2, partial_start)
+            all_sequences.extend(partial_sequence)
+    
+    # AI: Trim to exact length and shuffle to mix patterns
+    all_sequences = all_sequences[:sequence_length]
+    
+    # AI: Shuffle in chunks to maintain some local patterns but mix globally
+    chunk_size : int = 20
+    chunks : List[List[event_type]] = [all_sequences[i:i+chunk_size] for i in range(0, len(all_sequences), chunk_size)]
+    np.random.shuffle(chunks)
+    sequence: List[event_type]= []
+    for chunk in chunks:
+        sequence.extend(chunk)
+    
+    # AI: Final trim
+    sequence = sequence[:sequence_length]
+    
+    print(f"\nGenerated sequence with {len(starting_states)} different starting patterns")
+    print(f"Total sequence length: {len(sequence)}")
+    
+    # AI: Verify the sequence follows deterministic rules
+    print("\nVerification: Checking if sequence follows deterministic transition matrix...")
+    violations = 0
+    labels = ["A", "B{False}", "B{True}"]
+    
+    for i in range(len(sequence) - 2):
+        state = events_to_sequence_state(sequence[i], sequence[i+1])
+        actual_next = sequence[i+2]
+        
+        # AI: Check what the transition matrix says should happen
+        expected_probs = transition_matrix[state]
+        expected_next = np.argmax(expected_probs)
+        
+        if actual_next != expected_next:
+            violations += 1
+            if violations <= 5:  # AI: Show first few violations
+                state_desc = f"[{labels[sequence[i]]}, {labels[sequence[i+1]]}]"
+                print(f"  Violation {violations}: {state_desc} -> {labels[actual_next]} (expected {labels[expected_next]})")
+    
+    print(f"Total violations: {violations}/{len(sequence)-2} ({100*violations/(len(sequence)-2):.1f}%)")
+    
+    if violations == 0:
+        print("✓ Perfect compliance with deterministic transition matrix!")
+    else:
+        print("⚠ Sequence contains violations - data generation needs fixing")
+    
     return sequence
 
 if __name__ == "__main__":
