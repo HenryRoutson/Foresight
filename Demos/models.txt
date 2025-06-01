@@ -2,6 +2,6 @@
 
 models.py should contain
 
-1 Early stopping
-2 Confusion matricies to check that theoretical confusions are observed 
-3 A context length of 2
+
+- Confusion matricies to check that theoretical confusions are observed 
+- A context length of 2
