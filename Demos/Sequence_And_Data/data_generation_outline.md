@@ -73,6 +73,9 @@ From the above graph we can see that a good model will predict the following for
 [B{True}, B{False}] > B {False}
 [B{True}, B{True}] > B {True}
 
+
+(IMPORTANT >>>) You should use a confusion matrix to test this!!!
+
 Given this is deterministic, 
 we should expect 100% accuracy
 when predicting both sequence and data
@@ -104,6 +107,8 @@ which simplifies to
 [A, B] > B
 [B, A] > (1/2 A, 1/2 B)
 [B, B] > (1/4 A, 3/4 B)
+
+(IMPORTANT >>>) You should use a confusion matrix to test this!!!
 
 
 Where there is clearly more uncertianty about what to predict next.
