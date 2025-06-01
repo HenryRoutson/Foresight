@@ -42,6 +42,13 @@ TRAINING_DATA_WITHOUT_CONTEXT = [
 ]
 
 
+
+for without_context, with_context in zip(TRAINING_DATA_WITHOUT_CONTEXT, TRAINING_DATA_WITH_CONTEXT):
+  assert without_context == [x.replace("T", "B").replace("F", "B") for x in with_context]
+
+
+
+
 DATA_WITHOUT_CONTEXT_SET : set[str] = set()
 for data in TRAINING_DATA_WITHOUT_CONTEXT:
   for x in data :
