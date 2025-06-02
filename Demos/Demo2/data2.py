@@ -1,6 +1,7 @@
 
 from sklearn.feature_extraction import DictVectorizer
 import numpy as np
+from typing import NewType
 
 #  --------------------------------------------------------
 
@@ -13,31 +14,31 @@ import numpy as np
 from typing import TypedDict, Union, Any
 json_t = dict[str, Any]
 
-class A(TypedDict):
-    A: None
-class B_data(TypedDict):
-  bool_data : bool # context data
-class B_with_context(TypedDict):
-  B : B_data
-class B_without_context(TypedDict):
-  B : None
-
-A_none_dict : A = { "A" : None }
-
-# use b with or without data
-B_none_dict : B_without_context = { "B" : None }
-# OR
-B_false_dict : B_with_context = { "B" : { "bool_data" : False }}
-B_true_dict : B_with_context  = { "B" : { "bool_data" : True  }}
 
 
 
-DataWithContext = Union[A, B_with_context]
-DataWithoutContext = Union[A, B_without_context]
+# These types won't be here in the real world, they are only here to help you understand the structure of the example
 
 
 
-TRAINING_DATA_WITH_CONTEXT : list[list[DataWithContext]] = [
+
+event_id_t = NewType("event_id_t", str)
+
+class Event(TypedDict):
+    id: event_id_t
+    context : dict[str, Any]
+
+
+# note that the dict structure should be the same if the event id is the same,
+# TODO impliment a run time validation of this
+
+A_none_dict : Event = { "id" : event_id_t("A"), "context" : {} }
+B_none_dict : Event = { "id" : event_id_t("B_without_context"), "context" : {} }
+B_false_dict : Event = { "id" : event_id_t("B_with_context"), "context" : { "bool_data" : False }}
+B_true_dict : Event  = { "id" : event_id_t("B_with_context"), "context" : { "bool_data" : True  }}
+
+
+TRAINING_DATA_WITH_CONTEXT : list[list[Event]] = [
   # predict 3rd token from first two
   [A_none_dict, A_none_dict, A_none_dict],
   [A_none_dict, B_false_dict, B_false_dict],
@@ -51,19 +52,13 @@ TRAINING_DATA_WITH_CONTEXT : list[list[DataWithContext]] = [
 ]
 
 
-
-
-
-
-
-
 #  --------------------------------------------------------
 
 
 
 
 
-TRAINING_DATA_WITHOUT_CONTEXT : list[list[DataWithoutContext]] = [
+TRAINING_DATA_WITHOUT_CONTEXT : list[list[Event]] = [
   # predict 3rd token from first two
   [A_none_dict, A_none_dict, A_none_dict],
   [A_none_dict, B_none_dict, B_none_dict],
@@ -91,29 +86,33 @@ TRAINING_DATA_WITHOUT_CONTEXT : list[list[DataWithoutContext]] = [
 
 
 
+# TODO this should be generated at run time in a real world example
 
-B_with_context_vectoriser = DictVectorizer(sparse=False)
+key_to_vectorizer : dict[event_id_t, DictVectorizer] = {
+  event_id_t("A") : DictVectorizer(sparse=False),
+  event_id_t("B_without_context") : DictVectorizer(sparse=False),
+  event_id_t("B_with_context") : DictVectorizer(sparse=False)
+}
 
-# because the sequence order changes, we can't vectorise the whole sequence at once, we need to vectorise each event
-# TODO this we can use the "B" or "A" key to quickly determine which instance an event is
-# TODO To do this properly at run time, you should make a map of event key to vectoriser
+# because the sequence order changes, 
+# we can't vectorise the whole sequence at once, we need to vectorise each event
+# and so we need a map from the type of object to the vectorizer
 
 
 
-def forward_vectorize(vectorizer : DictVectorizer, object : list[json_t]) -> np.ndarray[Any, Any] :
+def forward_vectorize(event : Event, event_id : event_id_t) -> np.ndarray[Any, Any]:
 
-  print("forward_vectorize : ", vectorizer, object)
-
-  arr : np.ndarray[Any, Any] = vectorizer.fit_transform(object) # type: ignore
+  vectorizer : DictVectorizer = key_to_vectorizer[event_id]
+  
+  arr : np.ndarray[Any, Any] = vectorizer.fit_transform(event["context"]) # type: ignore
   assert(isinstance(arr, np.ndarray))
   return arr
 
 
-def reverse_vectorise(vectorizer : DictVectorizer, vector : np.ndarray[Any, Any]) -> list[json_t]:
+def reverse_vectorise(vector : np.ndarray[Any, Any], event_id : event_id_t) -> list[json_t]:
 
-  print("forward_vectorize : ", vectorizer, vector)
-
-  arr : list[json_t] = vectorizer.inverse_transform(object) # type: ignore
+  vectorizer : DictVectorizer = key_to_vectorizer[event_id]
+  arr : list[json_t] = vectorizer.inverse_transform(vector) # type: ignore
   assert(isinstance(arr, list))
   return arr
 
@@ -121,6 +120,26 @@ def reverse_vectorise(vectorizer : DictVectorizer, vector : np.ndarray[Any, Any]
 
 
 
+# run a basic test
+
+
+for sequence in TRAINING_DATA_WITH_CONTEXT :
+   for event in sequence :
+      print()
+      
+      if event["context"] == {} :
+         continue
+      
+      print(event)
+
+
+      vec = forward_vectorize(event, event["id"])
+      new_context = reverse_vectorise(vec,event["id"] )
+
+      print("new_context : ", new_context)
+      print("event[\"context\"] : ", event["context"])
+
+      assert(new_context == event["context"])
 
 
 
