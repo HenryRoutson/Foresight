@@ -48,7 +48,7 @@ TRAINING_DATA_WITH_CONTEXT : list[list[withDataEvents]] = [
 
 
 
-TRAINING_DATA_WITHOUT_CONTEXT = [
+TRAINING_DATA_WITHOUT_CONTEXT : list[list[withoutDataEvents]] = [
   [A_none_dict, A_none_dict, A_none_dict],
   [A_none_dict, B_none_dict, B_none_dict],
   [A_none_dict, B_none_dict, B_none_dict],
