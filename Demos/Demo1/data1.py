@@ -2,12 +2,12 @@
 
 #  --------------------------------------------------------
 
-
+from typing import Union
 
 # F is short for B{False}
 # T is short for B{True}
 
-TRAINING_DATA_WITH_CONTEXT = [
+TRAINING_DATA_WITH_CONTEXT : list[list[str]] = [
   ["A", "A", "A"],
   ["A", "F", "F"],
   ["A", "T", "T"],
@@ -31,7 +31,7 @@ assert len(DATA_WITH_CONTEXT_SET) == 3 # A, F, T
 #  --------------------------------------------------------
 
 
-TRAINING_DATA_WITHOUT_CONTEXT = [
+TRAINING_DATA_WITHOUT_CONTEXT : list[list[str]] = [
   ["A", "A", "A"],
   ["A", "B", "B"],
   ["A", "B", "B"],
