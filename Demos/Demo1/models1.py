@@ -14,11 +14,11 @@ from sklearn.preprocessing import LabelEncoder
 # Assuming data_generation.py is in the same directory or accessible via PYTHONPATH
 try:
     # AI: If run as part of the Demos package
-    from .data import TRAINING_DATA_WITH_CONTEXT, TRAINING_DATA_WITHOUT_CONTEXT, DATA_WITH_CONTEXT_SET, DATA_WITHOUT_CONTEXT_SET
+    from .data1 import TRAINING_DATA_WITH_CONTEXT, TRAINING_DATA_WITHOUT_CONTEXT, DATA_WITH_CONTEXT_SET, DATA_WITHOUT_CONTEXT_SET
 except ImportError:
     # AI: Fallback for direct execution if Demos/models.py is run as a script
     # and data_generation.py is in the same directory.
-    from Demos.Demo1.data import TRAINING_DATA_WITH_CONTEXT, TRAINING_DATA_WITHOUT_CONTEXT, DATA_WITH_CONTEXT_SET, DATA_WITHOUT_CONTEXT_SET
+    from Demos.Demo1.data1 import TRAINING_DATA_WITH_CONTEXT, TRAINING_DATA_WITHOUT_CONTEXT, DATA_WITH_CONTEXT_SET, DATA_WITHOUT_CONTEXT_SET
 
 
 # AI: Define type aliases for clarity as per user rules
