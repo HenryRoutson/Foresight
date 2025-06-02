@@ -1,4 +1,6 @@
 
+from sklearn.feature_extraction import DictVectorizer
+import numpy as np
 
 #  --------------------------------------------------------
 
@@ -81,6 +83,27 @@ TRAINING_DATA_WITHOUT_CONTEXT : list[list[DataWithoutContext]] = [
 
 
 #  --------------------------------------------------------
+
+
+
+
+with_context_vectorizer = DictVectorizer(sparse=False) # vectorise : [A, B_with_context]
+without_context_vectorizer = DictVectorizer(sparse=False) # vectorise : [A, B_without_context]
+
+
+
+
+
+
+
+def forward_vectorize(vectorizer : DictVectorizer, object : list[json_t]) -> np.ndarray[Any, Any] :
+  pass
+
+
+
+
+def reverse_vectorise(vectorizer : DictVectorizer, vector : np.ndarray[Any, Any]) -> list[json]:
+  pass
 
 
 
