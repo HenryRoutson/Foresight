@@ -4,13 +4,6 @@
 
 
 
-
-A = { "A" : None }
-B_false = { "B" : { "bool_data" : False }}
-B_true  = { "B" : { "bool_data" : True  }}
-
-
-
 # F is short for B{False}
 # T is short for B{True}
 
