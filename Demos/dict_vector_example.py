@@ -2,25 +2,27 @@ from sklearn.feature_extraction import DictVectorizer
 from typing import Any
 import numpy as np
 
-
-v : DictVectorizer = DictVectorizer(sparse=False)
-D : dict[str, Any] = [{'foo': 1, 'bar': 2}, {'foo': 3, 'baz': 1}]
-print("D ", D)
+json_t = dict[str, Any]
 
 
-D_vectorised = v.fit_transform(D)
-print("D_vectorised ", D_vectorised)
+vectorizer : DictVectorizer = DictVectorizer(sparse=False)
+list_dicts : list[json_t] = [{'foo': 1, 'bar': 2}, {'foo': 3, 'baz': 1}]
+print("list_dicts ", list_dicts) # D  [{'foo': 1, 'bar': 2}, {'foo': 3, 'baz': 1}]
 
-# X is now:
-# array([[2., 0., 1.],
-#        [0., 1., 3.]])
+
+list_dicts_vectorised : np.ndarray = vectorizer.fit_transform(list_dicts)
+print("list_dicts_vectorised ", list_dicts_vectorised) # D_vectorised  [[2. 0. 1.] \n [0. 1. 3.]]
+# type(list_dicts_vectorised)  <class 'numpy.ndarray'>
+# type(list_dicts_vectorised[0])  <class 'numpy.ndarray'>
+# type(list_dicts_vectorised[0][0])  <class 'numpy.float64'>
+
 
 # To reverse the transformation:
-D_un_vectorised : dict[str, Any] = v.inverse_transform(D_vectorised)
-print("D_un_vectorised ", D_un_vectorised)
+list_dicts_un_vectorised : list[json_t] = vectorizer.inverse_transform(list_dicts_vectorised)
+print("D_un_vectorised ", list_dicts_un_vectorised)
 
 
-# D_un_vectorised will be:
+# list_dicts_un_vectorised will be:
 # [{'bar': 2.0, 'foo': 1.0}, {'baz': 1.0, 'foo': 3.0}]
 
-assert(D_un_vectorised == D)
+assert(list_dicts_un_vectorised == list_dicts)
