@@ -97,13 +97,21 @@ without_context_vectorizer = DictVectorizer(sparse=False) # vectorise : [A, B_wi
 
 
 def forward_vectorize(vectorizer : DictVectorizer, object : list[json_t]) -> np.ndarray[Any, Any] :
-  pass
 
+  print("forward_vectorize : ", vectorizer, object)
 
+  arr : np.ndarray[Any, Any] = vectorizer.fit_transform(object) # type: ignore
+  assert(isinstance(arr, np.ndarray))
+  return arr
 
 
 def reverse_vectorise(vectorizer : DictVectorizer, vector : np.ndarray[Any, Any]) -> list[json_t]:
-  pass
+
+  print("forward_vectorize : ", vectorizer, vector)
+
+  arr : list[json_t] = vectorizer.inverse_transform(object) # type: ignore
+  assert(isinstance(arr, list))
+  return arr
 
 
 
