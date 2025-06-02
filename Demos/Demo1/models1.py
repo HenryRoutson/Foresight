@@ -7,7 +7,7 @@ from typing import List, Tuple, Dict, Set, Any
 
 import numpy as np
 # AI: NDArray import removed as np.ndarray[Any] will be used.
-from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.metrics import confusion_matrix, accuracy_score # type: ignore
 from sklearn.preprocessing import LabelEncoder
 
 # AI: Import data from data_generation.py

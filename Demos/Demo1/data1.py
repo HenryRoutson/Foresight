@@ -2,8 +2,6 @@
 
 #  --------------------------------------------------------
 
-from typing import Union
-
 # F is short for B{False}
 # T is short for B{True}
 
