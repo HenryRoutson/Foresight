@@ -17,7 +17,7 @@ print("list_dicts ", list_dicts) # D  [{'foo': 1, 'bar': 2}, {'foo': 3, 'baz': 1
 
 
 # AI : list_dicts_vectorised is a 2x3 numpy array of floats.
-list_dicts_vectorised : np.ndarray[tuple[Literal[2], Literal[3]], np.dtype[np.float64]] = vectorizer.fit_transform(list_dicts)
+list_dicts_vectorised : np.ndarray[tuple[Literal[2], Literal[3]], np.dtype[np.float64]] = vectorizer.fit_transform(list_dicts) # type: ignore
 # AI: Runtime type assertions for list_dicts_vectorised
 assert isinstance(list_dicts_vectorised, np.ndarray), "list_dicts_vectorised should be an np.ndarray"
 assert list_dicts_vectorised.shape == (2, 3), f"Shape of list_dicts_vectorised should be (2, 3), but was {list_dicts_vectorised.shape}"
@@ -32,7 +32,7 @@ print("list_dicts_vectorised ", list_dicts_vectorised) # D_vectorised  [[2. 0. 1
 
 # To reverse the transformation:
 # AI : list_dicts_un_vectorised is a list of dictionaries with string keys and float values after inverse transformation.
-list_dicts_un_vectorised : list[dict[str, float]] = vectorizer.inverse_transform(list_dicts_vectorised)
+list_dicts_un_vectorised : list[dict[str, float]] = vectorizer.inverse_transform(list_dicts_vectorised) # type: ignore
 # AI: Runtime type assertions for list_dicts_un_vectorised
 assert isinstance(list_dicts_un_vectorised, list), "list_dicts_un_vectorised should be a list"
 assert all(isinstance(item, dict) for item in list_dicts_un_vectorised), "All items in list_dicts_un_vectorised should be dictionaries"
