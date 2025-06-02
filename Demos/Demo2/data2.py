@@ -102,7 +102,7 @@ def forward_vectorize(vectorizer : DictVectorizer, object : list[json_t]) -> np.
 
 
 
-def reverse_vectorise(vectorizer : DictVectorizer, vector : np.ndarray[Any, Any]) -> list[json]:
+def reverse_vectorise(vectorizer : DictVectorizer, vector : np.ndarray[Any, Any]) -> list[json_t]:
   pass
 
 
