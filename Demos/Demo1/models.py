@@ -3,7 +3,7 @@
 # as per the requirements in models.txt and data_generation_outline.md.
 
 from collections import defaultdict, Counter
-from typing import List, Tuple, Dict, Set
+from typing import List, Tuple, Dict, Set, Any
 
 import numpy as np
 # AI: NDArray import removed as np.ndarray[Any] will be used.
@@ -189,7 +189,7 @@ class SequencePredictor:
         # The 'labels' parameter for confusion_matrix ensures consistent row/column order.
         # AI: For sklearn's confusion_matrix, the return is NDArray[np.int_] or similar.
         # Using np.ndarray[Any] to satisfy generic type requirement.
-        cm: np.ndarray[Any] = confusion_matrix(actual_targets, predicted_targets, labels=self._labels)
+        cm: np.ndarray[Any, Any] = confusion_matrix(actual_targets, predicted_targets, labels=self._labels)
         # AI: accuracy_score returns a float. np.float64 is a specific type of float.
         # Explicitly cast to float to satisfy linter if it expects standard float.
         acc: float = float(accuracy_score(actual_targets, predicted_targets))
