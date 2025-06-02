@@ -3,7 +3,7 @@
 #  --------------------------------------------------------
 
 
-from typing import TypedDict, Union
+from typing import TypedDict, Union, Any
 
 class A(TypedDict):
     A: None
@@ -39,6 +39,41 @@ TRAINING_DATA_WITH_CONTEXT : list[list[withDataEvents]] = [
   [B_true_dict, B_false_dict, B_false_dict],
   [B_true_dict, B_true_dict, B_true_dict]
 ]
+
+
+
+
+json_t = dict[str, Any]
+
+def mapObjectToNeurons(object : json_t) -> list[float]:
+   
+  neurons : list[float] = []
+  for key, value in object.items() :
+
+    assert(isinstance(key, str))
+
+    if isinstance(value, bool) :
+
+      neurons.extend([float(value)])
+
+    else :
+      # throw error if you can't handle type
+      raise Exception( 
+        f"\nmapObjectToNeurons : cannot handle this value data type. \n key : {key}, value {value}" 
+      )
+
+  return neurons
+
+
+
+# TODO make a function to reverse mapObjectToNeurons
+
+
+def reverseMapObjectToNeurons() :
+
+  pass
+
+
 
 
 
