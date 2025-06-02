@@ -32,24 +32,6 @@ def normalize_probabilities(output_vector, prob_indices):
     return output_vector
 ```
 
-### 2. Other Constraint Types
-```python
-def apply_data_constraints(output_vector, constraint_metadata):
-    for i, constraint_type in enumerate(constraint_metadata):
-        if constraint_type == "probability":
-            continue  # Already handled by softmax
-        elif constraint_type == "non_negative":
-            output_vector[i] = F.relu(output_vector[i])
-        elif constraint_type == "bounded_0_1": 
-            output_vector[i] = torch.sigmoid(output_vector[i])
-        elif constraint_type == "integer":
-            output_vector[i] = torch.round(output_vector[i])
-        elif constraint_type == "boolean":
-            output_vector[i] = torch.round(torch.sigmoid(output_vector[i]))
-    
-    return output_vector
-```
-
 
 ## Why This Beats Specialized Heads
 
