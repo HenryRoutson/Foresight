@@ -1,7 +1,0 @@
-
-
-models.py should contain
-
-
-- Confusion matricies to check that theoretical confusions are observed 
-- A context length of 2

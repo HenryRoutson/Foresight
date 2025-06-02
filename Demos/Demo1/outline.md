@@ -130,6 +130,11 @@ when predicting seqeunce (IE [A,B,B,A]) only
 
 As a side note you can model this with a state machine.
 
+## models.py should contain
+
+- Confusion matricies to check that theoretical confusions are observed 
+- A context length of 2
+
 
 
 ## Summary
