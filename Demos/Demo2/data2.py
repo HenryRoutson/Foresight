@@ -36,7 +36,9 @@ DataWithContext = Union[A, B_with_context]
 DataWithoutContext = Union[A, B_without_context]
 
 
+
 TRAINING_DATA_WITH_CONTEXT : list[list[DataWithContext]] = [
+  # predict 3rd token from first two
   [A_none_dict, A_none_dict, A_none_dict],
   [A_none_dict, B_false_dict, B_false_dict],
   [A_none_dict, B_true_dict, B_true_dict],
@@ -62,6 +64,7 @@ TRAINING_DATA_WITH_CONTEXT : list[list[DataWithContext]] = [
 
 
 TRAINING_DATA_WITHOUT_CONTEXT : list[list[DataWithoutContext]] = [
+  # predict 3rd token from first two
   [A_none_dict, A_none_dict, A_none_dict],
   [A_none_dict, B_none_dict, B_none_dict],
   [A_none_dict, B_none_dict, B_none_dict],
@@ -87,12 +90,13 @@ TRAINING_DATA_WITHOUT_CONTEXT : list[list[DataWithoutContext]] = [
 
 
 
-with_context_vectorizer = DictVectorizer(sparse=False) # vectorise : [A, B_with_context]
-without_context_vectorizer = DictVectorizer(sparse=False) # vectorise : [A, B_without_context]
 
 
+B_with_context_vectoriser = DictVectorizer(sparse=False)
 
-
+# because the sequence order changes, we can't vectorise the whole sequence at once, we need to vectorise each event
+# TODO this we can use the "B" or "A" key to quickly determine which instance an event is
+# TODO To do this properly at run time, you should make a map of event key to vectoriser
 
 
 
@@ -112,6 +116,12 @@ def reverse_vectorise(vectorizer : DictVectorizer, vector : np.ndarray[Any, Any]
   arr : list[json_t] = vectorizer.inverse_transform(object) # type: ignore
   assert(isinstance(arr, list))
   return arr
+
+
+
+
+
+
 
 
 
