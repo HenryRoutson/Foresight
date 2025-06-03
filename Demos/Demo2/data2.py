@@ -11,7 +11,7 @@ from typing import NewType
 # data has context if B has the internal data including true or false
 
 
-from typing import TypedDict, Union, Any
+from typing import TypedDict, Union, Any, Optional
 json_t = dict[str, Any]
 
 
@@ -86,13 +86,8 @@ TRAINING_DATA_WITHOUT_CONTEXT : list[list[Event]] = [
 
 
 
-# TODO this should be generated at run time in a real world example
 
-key_to_vectorizer : dict[event_id_t, DictVectorizer] = {
-  event_id_t("A") : DictVectorizer(sparse=False),
-  event_id_t("B_without_context") : DictVectorizer(sparse=False),
-  event_id_t("B_with_context") : DictVectorizer(sparse=False)
-}
+key_to_vectorizer : dict[event_id_t, DictVectorizer] = {}
 
 # because the sequence order changes, 
 # we can't vectorise the whole sequence at once, we need to vectorise each event
@@ -102,9 +97,14 @@ key_to_vectorizer : dict[event_id_t, DictVectorizer] = {
 
 def forward_vectorize(event : Event, event_id : event_id_t) -> np.ndarray[Any, Any]:
 
+  
+  if not event_id in key_to_vectorizer.keys() : # need to fit vectorizer
+    key_to_vectorizer[event_id] = DictVectorizer(sparse=False)
+    key_to_vectorizer[event_id].fit(event["context"]) # type: ignore
+
   vectorizer : DictVectorizer = key_to_vectorizer[event_id]
   
-  arr : np.ndarray[Any, Any] = vectorizer.fit_transform(event["context"]) # type: ignore
+  arr : np.ndarray[Any, Any] = vectorizer.transform(event["context"]) # type: ignore
   assert(isinstance(arr, np.ndarray))
   return arr
 
