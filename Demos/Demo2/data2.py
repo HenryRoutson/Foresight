@@ -1,4 +1,3 @@
-
 from sklearn.feature_extraction import DictVectorizer
 import numpy as np
 from typing import NewType
@@ -11,7 +10,7 @@ from typing import NewType
 # data has context if B has the internal data including true or false
 
 
-from typing import TypedDict, Union, Any, Optional
+from typing import TypedDict, Any
 json_t = dict[str, Any]
 
 
@@ -104,14 +103,14 @@ def forward_vectorize(event : Event, event_id : event_id_t) -> np.ndarray[Any, A
     print("creating new vectorizer for ", event_id, " for context ", event["context"])
     
     key_to_vectorizer[event_id] = DictVectorizer(sparse=False)
-    key_to_vectorizer[event_id].fit(event["context"]) # type: ignore
+    key_to_vectorizer[event_id].fit([event["context"]]) # type: ignore
 
   vectorizer : DictVectorizer = key_to_vectorizer[event_id]
 
 
-  assert(event["context"].keys() == vectorizer.get_feature_names_out().keys()) # type: ignore
+  assert set(event["context"].keys()) == set(vectorizer.get_feature_names_out()) # type: ignore
   
-  arr : np.ndarray[Any, Any] = vectorizer.transform(event["context"]) # type: ignore
+  arr : np.ndarray[Any, Any] = vectorizer.transform([event["context"]]) # type: ignore
   assert(isinstance(arr, np.ndarray))
   return arr
 
@@ -143,12 +142,12 @@ for sequence in TRAINING_DATA_WITH_CONTEXT :
 
 
       vec = forward_vectorize(event, event["id"])
-      new_context = reverse_vectorise(vec,event["id"] )
+      new_context_list = reverse_vectorise(vec,event["id"] )
 
-      print("new_context : ", new_context)
+      print("new_context_list[0] : ", new_context_list[0])
       print("event[\"context\"] : ", event["context"])
 
-      assert(new_context == event["context"])
+      assert new_context_list[0] == event["context"]
 
 
 
