@@ -97,12 +97,19 @@ key_to_vectorizer : dict[event_id_t, DictVectorizer] = {}
 
 def forward_vectorize(event : Event, event_id : event_id_t) -> np.ndarray[Any, Any]:
 
+  print("forward_vectorize called for ", event_id, " with context ", event["context"])
   
   if not event_id in key_to_vectorizer.keys() : # need to fit vectorizer
+
+    print("creating new vectorizer for ", event_id, " for context ", event["context"])
+    
     key_to_vectorizer[event_id] = DictVectorizer(sparse=False)
     key_to_vectorizer[event_id].fit(event["context"]) # type: ignore
 
   vectorizer : DictVectorizer = key_to_vectorizer[event_id]
+
+
+  assert(event["context"].keys() == vectorizer.get_feature_names_out().keys()) # type: ignore
   
   arr : np.ndarray[Any, Any] = vectorizer.transform(event["context"]) # type: ignore
   assert(isinstance(arr, np.ndarray))
@@ -110,6 +117,8 @@ def forward_vectorize(event : Event, event_id : event_id_t) -> np.ndarray[Any, A
 
 
 def reverse_vectorise(vector : np.ndarray[Any, Any], event_id : event_id_t) -> list[json_t]:
+
+  assert(event_id in key_to_vectorizer.keys())
 
   vectorizer : DictVectorizer = key_to_vectorizer[event_id]
   arr : list[json_t] = vectorizer.inverse_transform(vector) # type: ignore
