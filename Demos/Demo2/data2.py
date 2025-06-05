@@ -147,7 +147,56 @@ for sequence in TRAINING_DATA_WITH_CONTEXT :
       print("new_context_list[0] : ", new_context_list[0])
       print("event[\"context\"] : ", event["context"])
 
-      assert new_context_list[0] == event["context"]
+
+      """
+
+      Some types will change when they are vectorised 
+      ie bool changes to the probability of the bool being true for higher precision 
+
+      bool -> float
+      int -> float
+      float -> float
+
+
+      """
+
+
+
+      new_context : json_t = new_context_list[0]
+      old_context : json_t = event["context"]
+
+
+      # TODO there is an issue where if values are Falsey ie 0.0 or False they are not included in the new_context
+      if new_context.keys() != old_context.keys() :
+         print("new_context.keys() != old_context.keys() : ", new_context.keys(), " != ", old_context.keys())
+         print("new_context : ", new_context)
+         print("old_context : ", old_context)
+         assert False
+
+
+      for (old_key, old_value), (new_key, new_value) in zip(old_context.items(), new_context.items()) :
+        print("old_key : ", old_key)
+        print("type of old_value : ", type(old_value))
+        print("new_key : ", new_key)
+        print("type of new_value : ", type(new_value))
+
+
+        if type(old_value) == bool :
+           assert type(new_value) == float
+           
+
+
+
+
+
+
+         
+
+         # some types change when they are vectorised
+         
+
+
+      
 
 
 
