@@ -94,23 +94,42 @@ key_to_vectorizer : dict[event_id_t, DictVectorizer] = {}
 
 
 
+# AI : Helper function to preprocess context for DictVectorizer
+def _preprocess_context_for_vectorizer(context: dict[str, Any]) -> dict[str, Any]:
+    processed_context: dict[str, Any] = {} # AI : Explicitly type hint the local variable
+    for key, value in context.items():
+        # AI : Map False, 0, or 0.0 to 0.0001 to ensure key presence after inverse_transform
+        if value is False or value == 0 or value == 0.0: # Explicitly check for False, 0, 0.0
+            processed_context[key] = 0.0001
+        else:
+            processed_context[key] = value
+    return processed_context
+
+
 def forward_vectorize(event : Event, event_id : event_id_t) -> np.ndarray[Any, Any]:
 
   print("forward_vectorize called for ", event_id, " with context ", event["context"])
   
+  # AI : Preprocess the context before fitting or transforming
+  processed_event_context = _preprocess_context_for_vectorizer(event["context"])
+  # AI : Print the context that will be used by the vectorizer
+  print(f"forward_vectorize: using processed context for {event_id}: {processed_event_context}")
+
   if not event_id in key_to_vectorizer.keys() : # need to fit vectorizer
 
-    print("creating new vectorizer for ", event_id, " for context ", event["context"])
+    print("creating new vectorizer for ", event_id, " for context ", processed_event_context) # AI : Use processed context for fitting message
     
     key_to_vectorizer[event_id] = DictVectorizer(sparse=False)
-    key_to_vectorizer[event_id].fit([event["context"]]) # type: ignore
+    # AI : Fit with the processed context
+    key_to_vectorizer[event_id].fit([processed_event_context]) # type: ignore
 
   vectorizer : DictVectorizer = key_to_vectorizer[event_id]
 
 
   assert set(event["context"].keys()) == set(vectorizer.get_feature_names_out()) # type: ignore
   
-  arr : np.ndarray[Any, Any] = vectorizer.transform([event["context"]]) # type: ignore
+  # AI : Transform with the processed context
+  arr : np.ndarray[Any, Any] = vectorizer.transform([processed_event_context]) # type: ignore
   assert(isinstance(arr, np.ndarray))
   return arr
 
@@ -182,7 +201,7 @@ for sequence in TRAINING_DATA_WITH_CONTEXT :
 
 
         if type(old_value) == bool :
-           assert type(new_value) == float
+           assert type(new_value) == np.float64, "new_value is not a float : " + str(new_value) + " it is a " + str(type(new_value))
            
 
 
