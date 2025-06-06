@@ -1,9 +1,7 @@
 
 
 
-
-
-data 2, I need to handle event probabilities
+can't pass in arrays yet, but i can write something to handle that
 
 
 
