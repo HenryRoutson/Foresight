@@ -1,14 +1,22 @@
-# AI: models2.py (RNN Implementation)
-# This file implements an RNN (LSTM) to predict sequence outcomes using vectorized data.
-# It replaces the previous statistical model to handle complex, non-string-convertible data.
+# AI: models2.py (Transformer Implementation)
+# This file implements a Transformer to predict sequence outcomes using vectorized data.
+# It uses a hybrid loss function and a simple Transformer encoder architecture.
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.metrics import confusion_matrix, accuracy_score
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Tuple, Any
 import sys, os
+import random
+import math
+
+# AI: Set random seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 # AI: Suppressing the print output from the imported data2.py for cleaner execution.
 original_stdout = sys.stdout
@@ -20,8 +28,7 @@ try:
         TRAINING_DATA_WITHOUT_CONTEXT_VECTORISED,
         events_id_list,
         event_id_to_vectorizer,
-        get_vectorizer_output_length,
-        Event
+        get_vectorizer_output_length
     )
 except (ImportError, ModuleNotFoundError):
     from Demos.Demo2.data2 import (
@@ -29,8 +36,7 @@ except (ImportError, ModuleNotFoundError):
         TRAINING_DATA_WITHOUT_CONTEXT_VECTORISED,
         events_id_list,
         event_id_to_vectorizer,
-        get_vectorizer_output_length,
-        Event
+        get_vectorizer_output_length
     )
 finally:
     # AI: Restore stdout right after the import.
@@ -39,164 +45,191 @@ finally:
 
 # AI: Define global constants for the model and training
 INPUT_SIZE = len(TRAINING_DATA_WITH_CONTEXT_VECTORISED[0][0])
-HIDDEN_SIZE = 32 # AI: A reasonable hidden size for this complexity
-OUTPUT_SIZE = INPUT_SIZE # AI: The model predicts a vector of the same size as the input
-EPOCHS = 200 # AI: Sufficient epochs for convergence on this small dataset
-LEARNING_RATE = 0.01
+NUM_EVENT_TYPES = len(events_id_list)
+DATA_VECTOR_SIZE = INPUT_SIZE - NUM_EVENT_TYPES
+# AI: Transformer specific hyperparameters
+D_MODEL = 32 # AI: Reverted to larger model
+NHEAD = 4    # AI: Reverted to larger model
+NUM_LAYERS = 2 # AI: Reverted to larger model
 
-def prepare_data(vectorised_data: List[List[np.ndarray[Any, Any]]]) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+EPOCHS = 1000 # AI: Increased epochs for better convergence
+LEARNING_RATE = 0.001 # AI: Adjusted learning rate for more stable training
+
+def prepare_data(vectorised_data: List[List[np.ndarray[Any, Any]]]) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
     """
-    AI: Prepares the raw numpy data for the PyTorch model.
-    This involves converting None to NaN, creating tensors, and splitting into (context, target) pairs.
+    AI: Prepares data, splitting the target into classification and regression parts.
+    Input `None` values are converted to 0. Target `None` values are converted to NaN for masking.
     """
-    processed_data : list[Tuple[torch.Tensor, torch.Tensor]] = []
+    processed_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = []
     for sequence in vectorised_data:
-        # AI: Convert the list of numpy arrays into a single numpy matrix.
-        list_of_lists = [list(item) for item in sequence]
-        sequence_np = np.array(list_of_lists, dtype=object)
+        # AI: Create a copy of the sequence to modify
+        sequence_np = np.array([list(item) for item in sequence], dtype=object)
+        
+        # AI: Process context (inputs): replace None with 0
+        context_np = sequence_np[:2, :].copy()
+        context_np[context_np == None] = 0.0
+        context_tensor = torch.tensor(context_np.astype(np.float32))
 
-        # AI: Replace python None with numpy.nan for numeric processing
-        for i in range(sequence_np.shape[0]):
-            for j in range(sequence_np.shape[1]):
-                if sequence_np[i, j] is None:
-                    sequence_np[i, j] = np.nan
+        # AI: Process target: replace None with NaN for loss calculation
+        target_np = sequence_np[2, :].copy()
+        target_np[target_np == None] = np.nan
+        target_tensor = torch.tensor(target_np.astype(np.float32))
+        
+        # AI: The one-hot encoding part of the target should be clean of NaNs, but this is safer.
+        target_class_one_hot = target_tensor[:NUM_EVENT_TYPES]
+        target_class = torch.argmax(torch.nan_to_num(target_class_one_hot, nan=-1.0))
 
-        # AI: Convert to a float tensor
-        sequence_tensor = torch.tensor(sequence_np.astype(np.float32))
-
-        # AI: The context is the first two events, the target is the third.
-        context = sequence_tensor[:2]
-        target = sequence_tensor[2]
-        processed_data.append((context, target))
+        target_data = target_tensor[NUM_EVENT_TYPES:]
+        
+        processed_data.append((context_tensor, target_class, target_data))
     return processed_data
 
-class RnnPredictor(nn.Module):
+class PositionalEncoding(nn.Module):
     """
-    AI: An LSTM-based RNN to predict the next event vector in a sequence.
+    AI: Injects positional information into the input embeddings.
     """
-    def __init__(self, input_size: int, hidden_size: int, output_size: int):
-        super(RnnPredictor, self).__init__()
-        # AI: LSTM layer for processing the sequence. batch_first=True expects
-        # input tensors of shape (batch_size, sequence_length, input_size).
-        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
-        # AI: A linear layer to map the LSTM's output to the desired prediction vector size.
-        self.linear = nn.Linear(hidden_size, output_size)
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 10):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, d_model)
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # AI: x shape: (batch_size, sequence_length=2, input_size)
-        lstm_out, _ = self.lstm(x)
-        # AI: We only need the output from the last time step for our prediction.
-        last_hidden_state = lstm_out[:, -1, :]
-        prediction = self.linear(last_hidden_state)
-        return prediction
+        """
+        Args:
+            x: Tensor, shape [batch_size, seq_len, d_model]
+        """
+        x = x + self.pe[:x.size(1)]
+        return self.dropout(x)
 
-def masked_mse_loss(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+class TransformerPredictor(nn.Module):
     """
-    AI: Custom loss function that calculates Mean Squared Error only on the non-NaN
-    elements of the target vector. This is the core of the "Masked Loss Function".
+    AI: A Transformer-based model for sequence prediction with positional encoding.
     """
-    mask = ~torch.isnan(target)
-    # AI: If the mask is all False (e.g., target is all NaN), loss is 0.
+    def __init__(self, input_size: int, d_model: int, nhead: int, num_layers: int, num_classes: int, data_vector_size: int):
+        super(TransformerPredictor, self).__init__()
+        self.input_projection = nn.Linear(input_size, d_model)
+        self.pos_encoder = PositionalEncoding(d_model, dropout=0.0)
+        encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, batch_first=True, dim_feedforward=d_model*4, dropout=0.0)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.classification_head = nn.Linear(d_model, num_classes)
+        self.regression_head = nn.Linear(d_model, data_vector_size)
+
+    def forward(self, src: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        src = self.input_projection(src)
+        src = self.pos_encoder(src)
+        output = self.transformer_encoder(src)
+        last_output = output[:, -1, :]
+        class_pred = self.classification_head(last_output)
+        data_pred = self.regression_head(last_output)
+        return class_pred, data_pred
+
+def hybrid_loss(class_pred: torch.Tensor, data_pred: torch.Tensor, 
+                target_class: torch.Tensor, target_data: torch.Tensor) -> torch.Tensor:
+    """
+    AI: Combines Cross-Entropy loss for classification and a masked MSE for regression.
+    """
+    # AI: Classification loss
+    class_loss = nn.functional.cross_entropy(class_pred, target_class)
+    
+    # AI: Regression loss (masked)
+    mask = ~torch.isnan(target_data)
     if not mask.any():
-        return torch.tensor(0.0, device=prediction.device)
-    
-    # AI: Apply the mask to both prediction and target before calculating loss.
-    prediction_masked = torch.masked_select(prediction, mask)
-    target_masked = torch.masked_select(target, mask)
-    
-    return nn.functional.mse_loss(prediction_masked, target_masked)
+        data_loss = torch.tensor(0.0, device=data_pred.device)
+    else:
+        data_pred_masked = torch.masked_select(data_pred, mask)
+        target_data_masked = torch.masked_select(target_data, mask)
+        data_loss = nn.functional.mse_loss(data_pred_masked, target_data_masked)
+        
+    # AI: Weighting data_loss to prevent it from overwhelming classification loss.
+    return class_loss + 0.1 * data_loss
 
-def train_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor]]):
-    """
-    AI: The main training loop for the RNN model.
-    """
-    optimizer : optim.Optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    model.train() # AI: Set the model to training mode
+def train_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
+    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+    scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
+    model.train()
+
+    # AI: Collate data into a single batch for stable training
+    contexts = torch.stack([item[0] for item in data])
+    target_classes = torch.stack([item[1] for item in data])
+    target_datas = torch.stack([item[2] for item in data])
 
     for epoch in range(EPOCHS):
-        total_loss = 0
-        for context, target in data:
-            optimizer.zero_grad()
-            
-            # AI: Add a batch dimension for the LSTM layer
-            context = context.unsqueeze(0)
-            
-            prediction = model(context).squeeze(0)
-            
-            loss : torch.Tensor = masked_mse_loss(prediction, target)
+        optimizer.zero_grad()
+        class_pred, data_pred = model(contexts)
+        loss = hybrid_loss(class_pred, data_pred, target_classes, target_datas)
 
-            # AI: The loss can be NaN if prediction becomes NaN. Skip update if so.
-            if not torch.isnan(loss):
-                loss.backward()
-                optimizer.step()
-                total_loss += loss.item()
-        
-        # if (epoch + 1) % (EPOCHS // 10) == 0:
-        #     print(f"Epoch [{epoch+1}/{EPOCHS}], Loss: {total_loss/len(data):.4f}")
+        if epoch > 0 and epoch % 100 == 0:
+            print(f"Epoch {epoch}, Loss: {loss.item()}")
 
-def vector_to_label(vector: np.ndarray[Any, Any]) -> str:
+        if not torch.isnan(loss):
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+
+def vector_to_label(predicted_class_idx: int, predicted_data: np.ndarray[Any, Any]) -> str:
     """
-    AI: Converts a prediction or target vector back to a simple string label ('A', 'T', 'F', 'B')
-    for use in the confusion matrix.
+    AI: Converts model output (class index and data vector) to a simple string label.
     """
-    num_event_types = len(events_id_list)
-    event_probs = vector[:num_event_types]
-    predicted_idx = np.argmax(event_probs)
-    event_id = events_id_list[predicted_idx]
-
+    event_id = events_id_list[predicted_class_idx]
     if event_id == "A":
         return "A"
     if event_id == "B_without_context":
         return "B"
     if event_id == "B_with_context":
-        # AI: For 'B_with_context', we need to check the predicted boolean value
-        # to distinguish between 'T' (True) and 'F' (False).
         vectorizer = event_id_to_vectorizer.get(event_id)
-        if not vectorizer: return "B" # Fallback
-
-        feature_names = list(vectorizer.get_feature_names_out())
+        if not vectorizer:
+            return "B"
         
         try:
+            feature_names = list(vectorizer.get_feature_names_out())
             bool_data_idx = feature_names.index("bool_data")
-        except ValueError:
-            return "B" # Fallback if feature is not found
+        except (ValueError, AttributeError):
+            return "B"
 
-        # AI: Calculate the start index for this event's data in the vector
-        data_start_idx = num_event_types
-        for i in range(predicted_idx):
-            data_start_idx += get_vectorizer_output_length(events_id_list[i])
+        # AI: Calculate the starting index for this event type's data within the regression vector.
+        regression_data_start_idx = 0
+        for i in range(predicted_class_idx):
+            regression_data_start_idx += get_vectorizer_output_length(events_id_list[i])
         
-        # AI: Check the predicted value. A threshold of 0.5 is used to classify as True/False.
-        bool_value = vector[data_start_idx + bool_data_idx]
-        return "T" if bool_value > 0.5 else "F"
+        # AI: The final index is the start index plus the feature's index within its own vectorizer.
+        final_bool_idx = regression_data_start_idx + bool_data_idx
+        
+        if final_bool_idx >= len(predicted_data):
+            return "B"
 
-    return "Unknown" # Fallback
+        return "T" if predicted_data[final_bool_idx] > 0.5 else "F"
+    return "Unknown"
 
-def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor]]):
-    """
-    AI: Evaluates the model, generates predictions, converts them to labels,
-    and prints the confusion matrix and accuracy.
-    """
-    model.eval() # AI: Set the model to evaluation mode
-    actual_labels : list[str] = []
-    predicted_labels : list[str] = []
+def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
+    model.eval()
+    actual_labels: list[str] = []
+    predicted_labels: list[str] = []
 
     with torch.no_grad():
-        for context, target in data:
-            prediction_vec = model(context.unsqueeze(0)).squeeze(0)
+        for context, target_class, target_data in data:
+            class_pred, data_pred = model(context.unsqueeze(0))
             
-            # AI: Convert tensors to numpy for processing
-            prediction_np: np.ndarray[Any, Any] = prediction_vec.cpu().numpy()
-            target_np: np.ndarray[Any, Any] = target.cpu().numpy()
+            pred_class_idx = int(torch.argmax(class_pred.squeeze(0)).item())
+            pred_data_np: np.ndarray[Any, Any] = data_pred.squeeze(0).cpu().numpy()
 
-            actual_labels.append(vector_to_label(target_np))
-            predicted_labels.append(vector_to_label(prediction_np))
+            actual_class_idx = int(target_class.item())
+            actual_data_np: np.ndarray[Any, Any] = target_data.cpu().numpy()
+            
+            predicted_labels.append(vector_to_label(pred_class_idx, pred_data_np))
+            actual_labels.append(vector_to_label(actual_class_idx, actual_data_np))
     
-    # AI: Use the set of actual labels to ensure the confusion matrix is ordered correctly.
-    labels : list[str] = sorted(list(set(actual_labels)))
-    
+    labels: list[str] = sorted(list(set(actual_labels)))
+    if not labels:
+        print("No data to evaluate.")
+        return
+        
     cm: np.ndarray[Any, Any] = confusion_matrix(actual_labels, predicted_labels, labels=labels)
-    acc: float = accuracy_score(actual_labels, predicted_labels)
+    acc: float = float(accuracy_score(actual_labels, predicted_labels))
     
     print(f"Labels for Confusion Matrix: {labels}")
     print("Confusion Matrix:")
@@ -221,7 +254,7 @@ def main():
 
     # --- WITH CONTEXT ---
     print("\nTraining model WITH context...")
-    model_with_context = RnnPredictor(INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE)
+    model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
     train_model(model_with_context, data_with_context)
     print("Evaluating model WITH context...")
     evaluate_model(model_with_context, data_with_context)
@@ -229,7 +262,7 @@ def main():
 
     # --- WITHOUT CONTEXT ---
     print("\nTraining model WITHOUT context...")
-    model_without_context = RnnPredictor(INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE)
+    model_without_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
     train_model(model_without_context, data_without_context)
     print("Evaluating model WITHOUT context...")
     evaluate_model(model_without_context, data_without_context)
