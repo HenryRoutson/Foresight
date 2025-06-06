@@ -93,7 +93,8 @@ key_to_vectorizer : dict[event_id_t, DictVectorizer] = {}
 # and so we need a map from the type of object to the vectorizer
 
 
-
+# This is a function which avoids of Falsey values being ignored by the vectorizer, 
+# I may try to merge something into sci kit learn to override this behaviour later
 # AI : Helper function to preprocess context for DictVectorizer
 def _preprocess_context_for_vectorizer(context: dict[str, Any]) -> dict[str, Any]:
     processed_context: dict[str, Any] = {} # AI : Explicitly type hint the local variable
@@ -195,9 +196,9 @@ for sequence in TRAINING_DATA_WITH_CONTEXT :
 
       for (old_key, old_value), (new_key, new_value) in zip(old_context.items(), new_context.items()) :
         print("old_key : ", old_key)
-        print("type of old_value : ", type(old_value))
+        print("type of old_value : ", str(type(old_value)))
         print("new_key : ", new_key)
-        print("type of new_value : ", type(new_value))
+        print("type of new_value : ", str(type(new_value)))
 
 
         if type(old_value) == bool :
