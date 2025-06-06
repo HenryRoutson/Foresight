@@ -99,9 +99,9 @@ key_to_vectorizer : dict[event_id_t, DictVectorizer] = {}
 def _preprocess_context_for_vectorizer(context: dict[str, Any]) -> dict[str, Any]:
     processed_context: dict[str, Any] = {} # AI : Explicitly type hint the local variable
     for key, value in context.items():
-        # AI : Map False, 0, or 0.0 to 0.0001 to ensure key presence after inverse_transform
+        # AI : Map False, 0, or 0.0 to a low value to ensure key presence after inverse_transform
         if value is False or value == 0 or value == 0.0: # Explicitly check for False, 0, 0.0
-            processed_context[key] = 0.0001
+            processed_context[key] = 0.0000001
         else:
             processed_context[key] = value
     return processed_context
