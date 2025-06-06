@@ -25,16 +25,17 @@ event_id_t = NewType("event_id_t", str)
 
 class Event(TypedDict):
     id: event_id_t
+    id_debug : str # This is for debugging purposes,
     context : dict[str, Any]
 
 
 # note that the dict structure should be the same if the event id is the same,
 # TODO impliment a run time validation of this
 
-A_none_dict : Event = { "id" : event_id_t("A"), "context" : {} }
-B_none_dict : Event = { "id" : event_id_t("B_without_context"), "context" : {} }
-B_false_dict : Event = { "id" : event_id_t("B_with_context"), "context" : { "bool_data" : False, "more_bool_data" : False }}
-B_true_dict : Event  = { "id" : event_id_t("B_with_context"), "context" : { "bool_data" : True, "more_bool_data" : True }}
+A_none_dict : Event = { "id" : event_id_t("A"), "id_debug" : "A", "context" : {} }
+B_none_dict : Event = { "id" : event_id_t("B_without_context"), "id_debug" : "B", "context" : {} }
+B_false_dict : Event = { "id" : event_id_t("B_with_context"), "id_debug" : "F", "context" : { "bool_data" : False, "more_bool_data" : False }}
+B_true_dict : Event  = { "id" : event_id_t("B_with_context"), "id_debug" : "T", "context" : { "bool_data" : True, "more_bool_data" : True }}
 
 
 TRAINING_DATA_WITH_CONTEXT : list[list[Event]] = [
