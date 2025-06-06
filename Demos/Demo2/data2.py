@@ -296,14 +296,19 @@ def create_backprop_target(event : Event) -> np.ndarray[Any, Any]:
       if tmp_forward_vectorize is None :
          pass # don't need to add anything
       else :
-         vectors.append(tmp_forward_vectorize)
+         vectors.append(tmp_forward_vectorize[0])
 
     else :
       print("event_id != event_id : ", event_id)
 
       num_zeros = get_vectorizer_output_length(event_id)
       if num_zeros != 0 :
-         vectors.append(np.zeros(num_zeros))
+         
+
+         null_list : list[None] = [None] * num_zeros
+         null_array : np.ndarray[Any, Any] = np.array(null_list)
+
+         vectors.append(null_array)
 
 
 
@@ -329,10 +334,20 @@ def create_backprop_target(event : Event) -> np.ndarray[Any, Any]:
 
 print("\n\n\n\n : ")
 
+
+backprop_length : Optional[int] = None
 for sequence in TRAINING_DATA_WITH_CONTEXT :
    for event in sequence :
       
       backprop_target = create_backprop_target(event)
+
+
+      if backprop_length is None :
+         backprop_length = len(backprop_target)
+      else :
+         assert backprop_length == len(backprop_target), "backprop_length is not the same for all sequences : " + str(backprop_length) + " != " + str(len(backprop_target))
+
+
       print("backprop_target : ", backprop_target)
 
   
