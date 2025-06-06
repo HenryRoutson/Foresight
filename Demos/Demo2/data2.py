@@ -304,11 +304,13 @@ def create_backprop_target(event : Event) -> np.ndarray[Any, Any]:
       num_zeros = get_vectorizer_output_length(event_id)
       if num_zeros != 0 :
          
+        # This list of Nones is intentional, 
+        # if a backprop target is none then you should set the error for that neuron to 0
+        # becuase the event never occured we have no information to backpropagate
+        null_list : list[None] = [None] * num_zeros 
+        null_array : np.ndarray[Any, Any] = np.array(null_list)
 
-         null_list : list[None] = [None] * num_zeros
-         null_array : np.ndarray[Any, Any] = np.array(null_list)
-
-         vectors.append(null_array)
+        vectors.append(null_array)
 
 
 
