@@ -174,7 +174,7 @@ def reverse_vectorise(vector : np.ndarray[Any, Any], event_id : event_id_t) -> O
 # run a basic test
 
 
-for sequence in TRAINING_DATA_WITH_CONTEXT :
+for sequence in TRAINING_DATA_WITH_CONTEXT + TRAINING_DATA_WITHOUT_CONTEXT :
    for event in sequence :
       print()
       
@@ -354,14 +354,30 @@ for sequence in TRAINING_DATA_WITH_CONTEXT :
 
 
 
+def create_backprop_target_for_sequence(sequence : list[Event]) -> list[np.ndarray[Any, Any]]:
+   new_sequence : list[np.ndarray[Any, Any]] = []
+   for seq_event in sequence :
+      new_sequence.append(create_backprop_target(seq_event))
+   return new_sequence
+
+
+def create_backprop_target_for_sequence_lists(sequence_list : list[list[Event]]) -> list[list[np.ndarray[Any, Any]]]:
+   new_sequence_list : list[list[np.ndarray[Any, Any]]] = []
+   for sequence in sequence_list :
+      new_sequence_list.append(create_backprop_target_for_sequence(sequence))
+   return new_sequence_list
 
 
 
 
-  
 
 
+TRAINING_DATA_WITH_CONTEXT_VECTORISED : list[list[np.ndarray[Any, Any]]] = create_backprop_target_for_sequence_lists(TRAINING_DATA_WITH_CONTEXT)
+TRAINING_DATA_WITHOUT_CONTEXT_VECTORISED : list[list[np.ndarray[Any, Any]]] = create_backprop_target_for_sequence_lists(TRAINING_DATA_WITHOUT_CONTEXT)
 
+
+print("TRAINING_DATA_WITH_CONTEXT_VECTORISED : ", TRAINING_DATA_WITH_CONTEXT_VECTORISED)
+print("TRAINING_DATA_WITHOUT_CONTEXT_VECTORISED : ", TRAINING_DATA_WITHOUT_CONTEXT_VECTORISED)
 
 
 
