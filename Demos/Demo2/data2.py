@@ -10,7 +10,7 @@ from typing import NewType
 # data has context if B has the internal data including true or false
 
 
-from typing import TypedDict, Any
+from typing import TypedDict, Any, Optional
 json_t = dict[str, Any]
 
 
@@ -33,8 +33,8 @@ class Event(TypedDict):
 
 A_none_dict : Event = { "id" : event_id_t("A"), "context" : {} }
 B_none_dict : Event = { "id" : event_id_t("B_without_context"), "context" : {} }
-B_false_dict : Event = { "id" : event_id_t("B_with_context"), "context" : { "bool_data" : False }}
-B_true_dict : Event  = { "id" : event_id_t("B_with_context"), "context" : { "bool_data" : True  }}
+B_false_dict : Event = { "id" : event_id_t("B_with_context"), "context" : { "bool_data" : False, "more_bool_data" : False }}
+B_true_dict : Event  = { "id" : event_id_t("B_with_context"), "context" : { "bool_data" : True, "more_bool_data" : True }}
 
 
 TRAINING_DATA_WITH_CONTEXT : list[list[Event]] = [
@@ -74,19 +74,25 @@ TRAINING_DATA_WITHOUT_CONTEXT : list[list[Event]] = [
 
 
 
-
-
-
-
-
 #  --------------------------------------------------------
+# This section is for vectorising the context of the events
 
 
 
 
 
+event_id_to_vectorizer : dict[event_id_t, Optional[DictVectorizer]] = {} # each event has a vectorizer to encode its context
 
-key_to_vectorizer : dict[event_id_t, DictVectorizer] = {}
+# AI : Function to get the output length of a vectorizer for a given event_id
+def get_vectorizer_output_length(event_id: event_id_t) -> int:
+    if event_id not in event_id_to_vectorizer:
+        raise KeyError(f"No vectorizer found for event_id: {event_id}")
+    
+    vectorizer : Optional[DictVectorizer] = event_id_to_vectorizer[event_id]
+    if vectorizer is None :
+       return 0
+    else :
+      return len(vectorizer.get_feature_names_out()) # type: ignore
 
 # because the sequence order changes, 
 # we can't vectorise the whole sequence at once, we need to vectorise each event
@@ -107,7 +113,15 @@ def _preprocess_context_for_vectorizer(context: dict[str, Any]) -> dict[str, Any
     return processed_context
 
 
-def forward_vectorize(event : Event, event_id : event_id_t) -> np.ndarray[Any, Any]:
+def forward_vectorize(event : Event) -> Optional[np.ndarray[Any, Any]]:
+  event_id : event_id_t  = event["id"]
+
+
+  if event["context"] == {} :
+     event_id_to_vectorizer[event_id] = None
+     assert get_vectorizer_output_length(event_id) == 0
+     return None
+
 
   print("forward_vectorize called for ", event_id, " with context ", event["context"])
   
@@ -116,15 +130,15 @@ def forward_vectorize(event : Event, event_id : event_id_t) -> np.ndarray[Any, A
   # AI : Print the context that will be used by the vectorizer
   print(f"forward_vectorize: using processed context for {event_id}: {processed_event_context}")
 
-  if not event_id in key_to_vectorizer.keys() : # need to fit vectorizer
+  if not event_id in event_id_to_vectorizer.keys() : # need to fit vectorizer
 
     print("creating new vectorizer for ", event_id, " for context ", processed_event_context) # AI : Use processed context for fitting message
     
-    key_to_vectorizer[event_id] = DictVectorizer(sparse=False)
+    event_id_to_vectorizer[event_id] = DictVectorizer(sparse=False)
     # AI : Fit with the processed context
-    key_to_vectorizer[event_id].fit([processed_event_context]) # type: ignore
+    event_id_to_vectorizer[event_id].fit([processed_event_context]) # type: ignore
 
-  vectorizer : DictVectorizer = key_to_vectorizer[event_id]
+  vectorizer : Optional[DictVectorizer] = event_id_to_vectorizer[event_id]
 
 
   assert set(event["context"].keys()) == set(vectorizer.get_feature_names_out()) # type: ignore
@@ -134,14 +148,21 @@ def forward_vectorize(event : Event, event_id : event_id_t) -> np.ndarray[Any, A
   assert(isinstance(arr, np.ndarray))
 
   print("vectorised arr : ", arr)
+
+  assert arr.shape[0] == 1
+  assert arr.shape[1] == get_vectorizer_output_length(event_id)
+
   return arr
 
 
-def reverse_vectorise(vector : np.ndarray[Any, Any], event_id : event_id_t) -> list[json_t]:
+def reverse_vectorise(vector : np.ndarray[Any, Any], event_id : event_id_t) -> Optional[list[json_t]]:
 
-  assert(event_id in key_to_vectorizer.keys())
+  assert(event_id in event_id_to_vectorizer.keys())
 
-  vectorizer : DictVectorizer = key_to_vectorizer[event_id]
+  vectorizer : Optional[DictVectorizer] = event_id_to_vectorizer[event_id]
+  if vectorizer is None :
+     return None
+
   arr : list[json_t] = vectorizer.inverse_transform(vector) # type: ignore
   assert(isinstance(arr, list))
   return arr
@@ -157,14 +178,18 @@ for sequence in TRAINING_DATA_WITH_CONTEXT :
    for event in sequence :
       print()
       
-      if event["context"] == {} :
-         continue
-      
       print(event)
 
 
-      vec = forward_vectorize(event, event["id"])
+      vec = forward_vectorize(event)
+      if vec is None :
+         continue
+
       new_context_list = reverse_vectorise(vec,event["id"] )
+
+
+      if new_context_list is None :
+         continue
 
       print("new_context_list[0] : ", new_context_list[0])
       print("event[\"context\"] : ", event["context"])
@@ -206,19 +231,109 @@ for sequence in TRAINING_DATA_WITH_CONTEXT :
         if type(old_value) == bool :
            assert type(new_value) == np.float64, "new_value is not a float : " + str(new_value) + " it is a " + str(type(new_value))
            
+         # some types change when they are vectorised      
 
 
-
-
-
-
-         
-
-         # some types change when they are vectorised
-         
 
 
       
+
+
+
+
+#  --------------------------------------------------------
+# This section creates the extra data for probability of events ie the one hot encoding of
+# and then combines with the event data
+
+
+
+events_id_list : list[event_id_t] = list(event_id_to_vectorizer.keys())
+assert len(events_id_list) == len(set(events_id_list)), "events_id_list has duplicates : " + str(events_id_list)
+
+
+
+def event_id_get_index(event_id : event_id_t) -> int :
+   return events_id_list.index(event_id)
+
+
+
+
+
+# This is a function which creates the one hot encoding of the event id
+def create_one_hot_encoding_of_event_id(event_id : event_id_t) -> np.ndarray[Any, Any]:
+   one_hot_encoding = np.zeros(len(events_id_list))
+   one_hot_encoding[event_id_get_index(event_id)] = 1
+   return one_hot_encoding
+
+
+# Now combine OHE and event data
+# [is_event1, is_event2, is_event3, ... , event1_data, event2_data, event3_data, ...]
+# where is_event1, is_event2, is_event3 is the one hot encoding of the event id
+
+
+def create_backprop_target(event : Event) -> np.ndarray[Any, Any]:
+
+  print("create_backprop_target called for ", event)
+
+  occured_event_id = event["id"]
+  assert occured_event_id in events_id_list, "event_id not in events_id_list : " + str(occured_event_id) + " not in " + str(events_id_list)
+  one_hot_encoding : np.ndarray[Any, Any] = create_one_hot_encoding_of_event_id(occured_event_id)
+
+
+
+  vectors : list[np.ndarray[Any, Any]] = [one_hot_encoding]
+  print("events_id_list : ", events_id_list)
+  for event_id in events_id_list :
+
+
+    if occured_event_id == event_id :
+      print("event_id == event_id : ", event_id)
+
+      tmp_forward_vectorize = forward_vectorize(event)
+      if tmp_forward_vectorize is None :
+         pass # don't need to add anything
+      else :
+         vectors.append(tmp_forward_vectorize)
+
+
+
+    else :
+      print("event_id != event_id : ", event_id)
+      vectors.append(np.zeros(get_vectorizer_output_length(event_id)))
+
+
+  print("vectors : ", vectors)
+  backprop_target = np.concatenate(vectors)
+
+  print("completed create_backprop_target ")
+  return backprop_target
+
+
+
+
+
+
+
+
+print("\n\n\n\n : ")
+
+for sequence in TRAINING_DATA_WITH_CONTEXT :
+   for event in sequence :
+      
+      backprop_target = create_backprop_target(event)
+      print("backprop_target : ", backprop_target)
+
+  
+
+
+
+
+
+
+
+  
+
+
 
 
 
