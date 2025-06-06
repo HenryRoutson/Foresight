@@ -273,6 +273,7 @@ def create_one_hot_encoding_of_event_id(event_id : event_id_t) -> np.ndarray[Any
 
 def create_backprop_target(event : Event) -> np.ndarray[Any, Any]:
 
+  print("\n\n\n\n")
   print("create_backprop_target called for ", event)
 
   occured_event_id = event["id"]
@@ -284,6 +285,8 @@ def create_backprop_target(event : Event) -> np.ndarray[Any, Any]:
   vectors : list[np.ndarray[Any, Any]] = [one_hot_encoding]
   print("events_id_list : ", events_id_list)
   for event_id in events_id_list :
+    print(vectors)
+    print(f"{event_id} : length {get_vectorizer_output_length(event_id)}")
 
 
     if occured_event_id == event_id :
@@ -295,14 +298,23 @@ def create_backprop_target(event : Event) -> np.ndarray[Any, Any]:
       else :
          vectors.append(tmp_forward_vectorize)
 
-
-
     else :
       print("event_id != event_id : ", event_id)
-      vectors.append(np.zeros(get_vectorizer_output_length(event_id)))
+
+      num_zeros = get_vectorizer_output_length(event_id)
+      if num_zeros != 0 :
+         vectors.append(np.zeros(num_zeros))
+
+
+
+  print()
+   
+
 
 
   print("vectors : ", vectors)
+
+  
   backprop_target = np.concatenate(vectors)
 
   print("completed create_backprop_target ")
