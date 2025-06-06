@@ -132,6 +132,8 @@ def forward_vectorize(event : Event, event_id : event_id_t) -> np.ndarray[Any, A
   # AI : Transform with the processed context
   arr : np.ndarray[Any, Any] = vectorizer.transform([processed_event_context]) # type: ignore
   assert(isinstance(arr, np.ndarray))
+
+  print("vectorised arr : ", arr)
   return arr
 
 

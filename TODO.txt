@@ -3,6 +3,9 @@
 
 
 
+data 2, I need to handle event probabilities
+
+
 
 Use the example that i provided in the data generation outline,
 and check that the accuracy is the same as this.
