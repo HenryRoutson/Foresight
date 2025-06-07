@@ -109,7 +109,7 @@ def vectorize_data(raw_data: List[Tuple[List[float], str, Tuple[Optional[float],
             # AI: This is where the data for the "bad" model is created.
             # AI: For 'HOLD' events, this forces the target to be [0.0, 0.0]
             # AI: For 'SELL' events, this forces the target to be [price, 0.0]
-            target_data_vector[target_data_vector == None] = 0.0 
+            target_data_vector[target_data_vector == None] = 0.0 # type: ignore
 
         target_vector : np.ndarray[Any, Any] = np.concatenate([target_class_one_hot, target_data_vector]) # type: ignore
         

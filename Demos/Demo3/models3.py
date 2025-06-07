@@ -14,6 +14,8 @@ import sys, os
 import random
 import math
 import copy
+import matplotlib.pyplot as plt
+from scipy.stats import ttest_ind
 
 # AI: Set random seeds for reproducibility
 random.seed(42)
@@ -248,6 +250,30 @@ def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor
 
     return avg_targeted_mse
 
+def run_single_experiment(train_data_wc, val_data_wc, train_data_woc, val_data_woc) -> Tuple[float, float]:
+    """
+    AI: Runs one full training and evaluation cycle for both models and returns their MSE.
+    """
+    print("\n--- Running New Experiment Trial ---")
+    
+    # --- Train and evaluate the model with correct masking ---
+    model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
+    print("Training model WITH CONTEXT (Correct Masking)...")
+    train_model(model_with_context, train_data_wc, val_data_wc)
+    print("Evaluating model WITH CONTEXT...")
+    mse_with_context = evaluate_model(model_with_context, val_data_wc)
+
+    # --- Train and evaluate the model with incorrect coercion ---
+    model_without_backprop = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
+    print("\nTraining model WITH COERCED ZEROS (Incorrect)...")
+    train_model(model_without_backprop, train_data_woc, val_data_woc)
+    print("Evaluating model WITH COERCED ZEROS...")
+    mse_without_backprop = evaluate_model(model_without_backprop, val_data_woc)
+    
+    print(f"Trial Results -> Correct MSE: {mse_with_context:.4f}, Incorrect MSE: {mse_without_backprop:.4f}")
+    
+    return mse_with_context, mse_without_backprop
+
 def main():
     print("Preparing data...")
     data_with_context = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED)
@@ -255,36 +281,63 @@ def main():
 
     # --- Split data into training and validation sets ---
     # AI: Use a fixed random state for reproducibility. Shuffle is False as data has a time component.
-    train_data_wc, val_data_wc = train_test_split(data_with_context, test_size=0.2, random_state=42, shuffle=False)
-    train_data_woc, val_data_woc = train_test_split(data_with_context_coercion, test_size=0.2, random_state=42, shuffle=False)
+    train_data_wc : list[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
+    val_data_wc : list[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
+    train_data_woc : list[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
+    val_data_woc : list[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
+
+    train_data_wc, val_data_wc = train_test_split(data_with_context, test_size=0.2, random_state=42, shuffle=False) # type: ignore
+    train_data_woc, val_data_woc = train_test_split(data_with_context_coercion, test_size=0.2, random_state=42, shuffle=False) # type: ignore
     print(f"Data split into {len(train_data_wc)} training samples and {len(val_data_wc)} validation samples.")
 
-    print("\n--- Training model WITH CONTEXT (Correct Masking) ---")
-    model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
-    train_model(model_with_context, train_data_wc, val_data_wc)
-    print("\nEvaluating model WITH CONTEXT on validation data...")
-    mse_with_context = evaluate_model(model_with_context, val_data_wc)
-    print("-" * 50)
+    num_trials : int = 10  # AI: Number of times to run the experiment
+    results_correct : list[float] = []
+    results_incorrect : list[float] = []
 
-    print("\n--- Training model WITH COERCED ZEROS (Incorrect) ---")
-    model_without_backprop = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
-    train_model(model_without_backprop, train_data_woc, val_data_woc)
-    print("\nEvaluating model WITH COERCED ZEROS on validation data...")
-    mse_without_backprop = evaluate_model(model_without_backprop, val_data_woc)
-    print("-" * 50)
+    for i in range(num_trials):
+        # AI: Re-seed each trial for model weight initialization to be different but reproducible
+        torch.manual_seed(42 + i)
+        np.random.seed(42 + i)
+        random.seed(42 + i)
 
-    print("\n--- Final Quantitative Check ---")
-    print(f"Correct Model (Masking) Targeted MSE:   {mse_with_context}")
-    print(f"Incorrect Model (Coercion) Targeted MSE: {mse_without_backprop}")
+        mse_correct, mse_incorrect = run_single_experiment(train_data_wc, val_data_wc, train_data_woc, val_data_woc)
+        if not (np.isnan(mse_correct) or np.isnan(mse_incorrect)):
+            results_correct.append(mse_correct)
+            results_incorrect.append(mse_incorrect)
 
-    if np.isnan(mse_with_context) or np.isnan(mse_without_backprop):
-        print("\nCHECK SKIPPED: Could not retrieve MSE values.")
-    elif mse_without_backprop > mse_with_context * 2: # AI: Expecting a dramatic difference
-        ratio = mse_without_backprop / mse_with_context
-        print(f"\nSUCCESS: The coerced model's error is {ratio:.1f}x higher than the correct model's.")
-        print("This quantitatively proves the masking method is dramatically superior.")
-    else:
-        print("\nFAILURE: The MSE difference was not as dramatic as expected.")
-        
+    # --- Final Statistical Analysis ---
+    print("\n\n--- Final Statistical Analysis ---")
+    
+    mean_correct = np.mean(results_correct)
+    std_correct = np.std(results_correct)
+    mean_incorrect = np.mean(results_incorrect)
+    std_incorrect = np.std(results_incorrect)
+
+    print(f"Correct Model (Masking) MSE -> Mean: {mean_correct:.4f}, Std: {std_correct:.4f}")
+    print(f"Incorrect Model (Coercion) MSE -> Mean: {mean_incorrect:.4f}, Std: {std_incorrect:.4f}")
+
+    # --- Perform t-test ---
+    if len(results_correct) > 1 and len(results_incorrect) > 1:
+        t_stat, p_value = ttest_ind(results_correct, results_incorrect)
+        print(f"\nIndependent t-test results: t-statistic = {t_stat:.4f}, p-value = {p_value:.4f}")
+        if p_value < 0.05:
+            print("The difference is statistically significant (p < 0.05).")
+        else:
+            print("The difference is not statistically significant (p >= 0.05).")
+
+    # --- Create and save the plot ---
+    plt.figure(figsize=(10, 6))
+    plt.hist(results_correct, bins=10, alpha=0.7, label='Correct Model (Masking)')
+    plt.hist(results_incorrect, bins=10, alpha=0.7, label='Incorrect Model (Coercion)')
+    plt.xlabel('Average Targeted MSE')
+    plt.ylabel('Frequency')
+    plt.title('Distribution of Model Errors over {} Trials'.format(num_trials))
+    plt.legend()
+    plt.grid(True)
+    
+    plot_path = os.path.join(os.path.dirname(__file__), 'error_distribution.png')
+    plt.savefig(plot_path)
+    print(f"\nSaved error distribution plot to: {plot_path}")
+
 if __name__ == "__main__":
     main()
