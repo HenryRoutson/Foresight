@@ -386,3 +386,20 @@ print("TRAINING_DATA_WITHOUT_CONTEXT_VECTORISED : ", TRAINING_DATA_WITHOUT_CONTE
 
 
 
+
+
+
+TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION : list[list[np.ndarray[Any, Any]]] = create_backprop_target_for_sequence_lists(TRAINING_DATA_WITH_CONTEXT)
+
+# This is an example to show how performance is worse when we naively set the values for non occuring events to 0.0
+for sequence_index, sequence in enumerate(TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION) :
+   for vector_index, vector in enumerate(sequence) :
+      for value_index, value in enumerate(vector) :
+         if value == None :
+            TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION[sequence_index][vector_index][value_index] = 0.0 # This replaces the None with 0.0 over the whole vector
+
+
+print("TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION : ", TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION)
+
+         
+

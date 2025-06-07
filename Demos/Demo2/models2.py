@@ -28,6 +28,7 @@ try:
         TRAINING_DATA_WITHOUT_CONTEXT_VECTORISED,
         events_id_list,
         event_id_to_vectorizer,
+        TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION,
         get_vectorizer_output_length
     )
 except (ImportError, ModuleNotFoundError):
@@ -36,6 +37,7 @@ except (ImportError, ModuleNotFoundError):
         TRAINING_DATA_WITHOUT_CONTEXT_VECTORISED,
         events_id_list,
         event_id_to_vectorizer,
+        TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION,
         get_vectorizer_output_length
     )
 finally:
@@ -251,8 +253,11 @@ def main():
     print("Preparing data...")
     data_with_context = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED)
     data_without_context = prepare_data(TRAINING_DATA_WITHOUT_CONTEXT_VECTORISED)
+    data_with_context_coercion = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION)
+
 
     # --- WITH CONTEXT ---
+    # performance should be perfect
     print("\nTraining model WITH context...")
     model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
     train_model(model_with_context, data_with_context)
@@ -261,12 +266,25 @@ def main():
     print("-" * 40)
 
     # --- WITHOUT CONTEXT ---
+    # performance should be ok
     print("\nTraining model WITHOUT context...")
     model_without_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
     train_model(model_without_context, data_without_context)
     print("Evaluating model WITHOUT context...")
     evaluate_model(model_without_context, data_without_context)
     print("-" * 40)
+
+
+    # --- WITHOUT BACKPROP NONE VALUES ---
+    # performance should be bad
+    print("\nTraining model WITHOUT BACKPROP NONE VALUES...")
+    model_without_backprop_none_values = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
+    train_model(model_without_backprop_none_values, data_with_context_coercion)
+    print("Evaluating model WITHOUT BACKPROP NONE VALUES...")
+    evaluate_model(model_without_backprop_none_values, data_with_context_coercion)
+    print("-" * 40)
+
+
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,27 @@
 
 
 
+
+
+What the fuck is the new result and 
+prepare_data is doing some strange stuff to the data like setting to 0
+
+
+
+Create example of coerrcing values to zero
+
+
+
+
+
+i've made some demos of a library that i want to develop which is used to model event sequences with event context. I'll provide you the demos, can you tell me how i can make this into a more general framework where i can pass in 1) what RNN network i want to use ie a transformer or a lstm and 2) The sequence data. The library should handle 
+
+
+
+
+
+
+
 can't pass in arrays yet, but i can write something to handle that
 
 
