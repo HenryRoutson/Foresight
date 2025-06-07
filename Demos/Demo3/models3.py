@@ -15,7 +15,8 @@ import random
 import math
 import copy
 import matplotlib.pyplot as plt
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_ind # type: ignore # AI: Consider `pip install types-scipy` to remove this ignore
+import json
 
 # AI: Set random seeds for reproducibility
 random.seed(42)
@@ -45,6 +46,9 @@ finally:
     sys.stdout.close()
     sys.stdout = original_stdout
 
+# AI: Define a type alias for our data structure for clarity
+DataType = List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
+
 # AI: Define global constants for the model and training
 INPUT_SIZE, DATA_VECTOR_SIZE = get_vector_sizes()
 NUM_EVENT_TYPES = len(events_id_list)
@@ -55,12 +59,12 @@ NUM_LAYERS = 2
 EPOCHS = 20000
 LEARNING_RATE = 0.001
 
-def prepare_data(vectorised_data: List[List[np.ndarray[Any, Any]]]) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+def prepare_data(vectorised_data: List[List[np.ndarray[Any, Any]]]) -> DataType:
     """
     AI: Prepares data, splitting the target into classification and regression parts.
     Input `None` values are converted to 0. Target `None` values are converted to NaN for masking.
     """
-    processed_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = []
+    processed_data: DataType = []
     for sequence in vectorised_data:
         # AI: Correctly handle the list of arrays for context and the single array for target
         context_part = np.array(sequence[:2], dtype=object)
@@ -129,9 +133,10 @@ def hybrid_loss(class_pred: torch.Tensor, data_pred: torch.Tensor,
         
     return class_loss + 1.0 * data_loss # AI: Simplified weight for demo
 
-def train_model(model: nn.Module, train_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]], val_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]], patience: int = 100):
+def train_model(model: nn.Module, train_data: DataType, val_data: DataType, patience: int = 100) -> int:
     """
     AI: Trains the model using the provided data, with early stopping based on validation loss.
+    Returns the epoch number at which the best model was found.
     """
     optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
@@ -140,6 +145,7 @@ def train_model(model: nn.Module, train_data: List[Tuple[torch.Tensor, torch.Ten
     best_val_loss = float('inf')
     epochs_no_improve = 0
     best_model_wts = copy.deepcopy(model.state_dict())
+    best_epoch = 0
 
     # --- Prepare data Tensors ---
     train_contexts = torch.stack([item[0] for item in train_data])
@@ -176,6 +182,7 @@ def train_model(model: nn.Module, train_data: List[Tuple[torch.Tensor, torch.Ten
             best_val_loss = val_loss
             epochs_no_improve = 0
             best_model_wts = copy.deepcopy(model.state_dict())
+            best_epoch = epoch
         else:
             epochs_no_improve += 1
 
@@ -186,6 +193,7 @@ def train_model(model: nn.Module, train_data: List[Tuple[torch.Tensor, torch.Ten
     # --- Load best model weights ---
     print("\nFinished training. Restoring best model weights.")
     model.load_state_dict(best_model_wts)
+    return best_epoch
 
 def get_relevant_indices_for_event(event_class_idx: int) -> Tuple[int, int]:
     start_idx = 0
@@ -195,7 +203,7 @@ def get_relevant_indices_for_event(event_class_idx: int) -> Tuple[int, int]:
     length = get_vectorizer_output_length(events_id_list[event_class_idx])
     return start_idx, start_idx + length
 
-def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]) -> float:
+def evaluate_model(model: nn.Module, data: DataType) -> float:
     model.eval()
     all_pred_class_idx: list[int] = []
     all_actual_class_idx: list[int] = []
@@ -250,29 +258,32 @@ def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor
 
     return avg_targeted_mse
 
-def run_single_experiment(train_data_wc, val_data_wc, train_data_woc, val_data_woc) -> Tuple[float, float]:
+def run_single_experiment(
+    train_data_wc: DataType, val_data_wc: DataType, 
+    train_data_woc: DataType, val_data_woc: DataType
+) -> Tuple[float, float, int, int]:
     """
-    AI: Runs one full training and evaluation cycle for both models and returns their MSE.
+    AI: Runs one full training and evaluation cycle for both models and returns their MSE and best epoch.
     """
     print("\n--- Running New Experiment Trial ---")
     
     # --- Train and evaluate the model with correct masking ---
     model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
     print("Training model WITH CONTEXT (Correct Masking)...")
-    train_model(model_with_context, train_data_wc, val_data_wc)
+    epochs_correct = train_model(model_with_context, train_data_wc, val_data_wc)
     print("Evaluating model WITH CONTEXT...")
     mse_with_context = evaluate_model(model_with_context, val_data_wc)
 
     # --- Train and evaluate the model with incorrect coercion ---
     model_without_backprop = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
     print("\nTraining model WITH COERCED ZEROS (Incorrect)...")
-    train_model(model_without_backprop, train_data_woc, val_data_woc)
+    epochs_incorrect = train_model(model_without_backprop, train_data_woc, val_data_woc)
     print("Evaluating model WITH COERCED ZEROS...")
     mse_without_backprop = evaluate_model(model_without_backprop, val_data_woc)
     
-    print(f"Trial Results -> Correct MSE: {mse_with_context:.4f}, Incorrect MSE: {mse_without_backprop:.4f}")
+    print(f"Trial Results -> Correct MSE: {mse_with_context:.4f} (at epoch {epochs_correct}), Incorrect MSE: {mse_without_backprop:.4f} (at epoch {epochs_incorrect})")
     
-    return mse_with_context, mse_without_backprop
+    return mse_with_context, mse_without_backprop, epochs_correct, epochs_incorrect
 
 def main():
     print("Preparing data...")
@@ -281,10 +292,10 @@ def main():
 
     # --- Split data into training and validation sets ---
     # AI: Use a fixed random state for reproducibility. Shuffle is False as data has a time component.
-    train_data_wc : list[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
-    val_data_wc : list[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
-    train_data_woc : list[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
-    val_data_woc : list[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
+    train_data_wc : DataType
+    val_data_wc : DataType
+    train_data_woc : DataType
+    val_data_woc : DataType
 
     train_data_wc, val_data_wc = train_test_split(data_with_context, test_size=0.2, random_state=42, shuffle=False) # type: ignore
     train_data_woc, val_data_woc = train_test_split(data_with_context_coercion, test_size=0.2, random_state=42, shuffle=False) # type: ignore
@@ -293,6 +304,8 @@ def main():
     num_trials : int = 10  # AI: Number of times to run the experiment
     results_correct : list[float] = []
     results_incorrect : list[float] = []
+    epochs_correct_list: list[int] = []
+    epochs_incorrect_list: list[int] = []
 
     for i in range(num_trials):
         # AI: Re-seed each trial for model weight initialization to be different but reproducible
@@ -300,10 +313,12 @@ def main():
         np.random.seed(42 + i)
         random.seed(42 + i)
 
-        mse_correct, mse_incorrect = run_single_experiment(train_data_wc, val_data_wc, train_data_woc, val_data_woc)
+        mse_correct, mse_incorrect, epochs_correct, epochs_incorrect = run_single_experiment(train_data_wc, val_data_wc, train_data_woc, val_data_woc)
         if not (np.isnan(mse_correct) or np.isnan(mse_incorrect)):
             results_correct.append(mse_correct)
             results_incorrect.append(mse_incorrect)
+            epochs_correct_list.append(epochs_correct)
+            epochs_incorrect_list.append(epochs_incorrect)
 
     # --- Final Statistical Analysis ---
     print("\n\n--- Final Statistical Analysis ---")
@@ -317,27 +332,38 @@ def main():
     print(f"Incorrect Model (Coercion) MSE -> Mean: {mean_incorrect:.4f}, Std: {std_incorrect:.4f}")
 
     # --- Perform t-test ---
+    p_value = float('nan')
     if len(results_correct) > 1 and len(results_incorrect) > 1:
-        t_stat, p_value = ttest_ind(results_correct, results_incorrect)
+        t_stat, p_value = ttest_ind(results_correct, results_incorrect) # type: ignore
         print(f"\nIndependent t-test results: t-statistic = {t_stat:.4f}, p-value = {p_value:.4f}")
         if p_value < 0.05:
             print("The difference is statistically significant (p < 0.05).")
         else:
             print("The difference is not statistically significant (p >= 0.05).")
 
-    # --- Create and save the plot ---
-    plt.figure(figsize=(10, 6))
-    plt.hist(results_correct, bins=10, alpha=0.7, label='Correct Model (Masking)')
-    plt.hist(results_incorrect, bins=10, alpha=0.7, label='Incorrect Model (Coercion)')
-    plt.xlabel('Average Targeted MSE')
-    plt.ylabel('Frequency')
-    plt.title('Distribution of Model Errors over {} Trials'.format(num_trials))
-    plt.legend()
-    plt.grid(True)
-    
-    plot_path = os.path.join(os.path.dirname(__file__), 'error_distribution.png')
-    plt.savefig(plot_path)
-    print(f"\nSaved error distribution plot to: {plot_path}")
+    # --- Save results to JSON ---
+    results_data = {
+        "num_trials": num_trials,
+        "correct_model": {
+            "mse_results": results_correct,
+            "epochs": epochs_correct_list,
+            "mean_mse": mean_correct,
+            "std_mse": std_correct
+        },
+        "incorrect_model": {
+            "mse_results": results_incorrect,
+            "epochs": epochs_incorrect_list,
+            "mean_mse": mean_incorrect,
+            "std_mse": std_incorrect
+        },
+        "ttest": {
+            "p_value": p_value
+        }
+    }
+    results_path = os.path.join(os.path.dirname(__file__), 'results.json')
+    with open(results_path, 'w') as f:
+        json.dump(results_data, f, indent=4)
+    print(f"\nSaved experiment results to: {results_path}")
 
 if __name__ == "__main__":
     main()
