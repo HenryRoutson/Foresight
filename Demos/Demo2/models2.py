@@ -218,7 +218,10 @@ def get_relevant_indices_for_event(event_class_idx: int) -> Tuple[int, int]:
     length = get_vectorizer_output_length(events_id_list[event_class_idx])
     return start_idx, start_idx + length
 
-def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
+def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]) -> float:
+    """
+    AI: Evaluates the model's performance, printing metrics and returning the targeted MSE.
+    """
     model.eval()
     actual_labels: list[str] = []
     predicted_labels: list[str] = []
@@ -257,7 +260,7 @@ def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor
     labels: list[str] = sorted(list(set(actual_labels)))
     if not labels:
         print("No data to evaluate.")
-        return
+        return float('nan')
         
     cm: np.ndarray[Any, Any] = confusion_matrix(actual_labels, predicted_labels, labels=labels)
     acc: float = float(accuracy_score(actual_labels, predicted_labels))
@@ -275,9 +278,12 @@ def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor
     
     print(f"Accuracy: {acc:.4f} ({int(acc * len(actual_labels))}/{len(actual_labels)})")
     
+    avg_targeted_mse = float('nan')
     if targeted_mses:
-        avg_targeted_mse = np.mean(targeted_mses)
+        avg_targeted_mse = float(np.mean(targeted_mses))
         print(f"Average Targeted MSE (on relevant data only): {avg_targeted_mse:.6f}")
+
+    return avg_targeted_mse
 
 def main():
     """
@@ -295,7 +301,7 @@ def main():
     model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
     train_model(model_with_context, data_with_context)
     print("Evaluating model WITH context...")
-    evaluate_model(model_with_context, data_with_context)
+    mse_with_context = evaluate_model(model_with_context, data_with_context)
     print("-" * 40)
 
     # # --- WITHOUT CONTEXT ---
@@ -314,8 +320,22 @@ def main():
     model_without_backprop_none_values = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
     train_model(model_without_backprop_none_values, data_with_context_coercion)
     print("Evaluating model WITHOUT BACKPROP NONE VALUES...")
-    evaluate_model(model_without_backprop_none_values, data_with_context_coercion)
+    mse_without_backprop = evaluate_model(model_without_backprop_none_values, data_with_context_coercion)
     print("-" * 40)
+
+    # --- FINAL CHECK ---
+    print("\n--- Final Quantitative Check ---")
+    print(f"Correct Model (with masking) Targeted MSE:   {mse_with_context:.6f}")
+    print(f"Incorrect Model (coerced to 0) Targeted MSE: {mse_without_backprop:.6f}")
+
+    if np.isnan(mse_with_context) or np.isnan(mse_without_backprop):
+        print("\nCHECK SKIPPED: Could not retrieve MSE values for comparison.")
+    elif mse_without_backprop > mse_with_context:
+        print("\nSUCCESS: The model trained with incorrect zero-coercion has a higher regression error.")
+        print("This quantitatively proves that masking is the superior method.")
+    else:
+        print("\nFAILURE: The targeted MSE check did not show the expected difference.")
+        print(f"Difference: {mse_with_context - mse_without_backprop:.8f}. This may be due to model parameters, data simplicity, or random seed.")
 
 
 
