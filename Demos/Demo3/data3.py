@@ -33,14 +33,14 @@ def generate_price_series(length: int) -> np.ndarray[Any, Any]:
     seasonality2 = 8 * np.sin(np.linspace(0, 2 * np.pi * 25, length))
     return base_price + noise + trend + seasonality1 + seasonality2
 
-def generate_training_samples(price_series: np.ndarray[Any, Any]) -> List[Tuple[List[float], str, Any]]:
+def generate_training_samples(price_series: np.ndarray[Any, Any]) -> List[Tuple[List[float], str, Tuple[Optional[float], Optional[float]]]]:
     """
     AI: Generates training samples based on rules that create conflicting regression targets.
     - 'BUY'/'SELL' events have high-value regression targets (~150-200).
     - 'HOLD' events have no regression target (None).
     This sets up the conflict for the incorrectly configured model.
     """
-    samples = []
+    samples: List[Tuple[List[float], str, Tuple[Optional[float], Optional[float]]]] = []
     for i in range(CONTEXT_WINDOW, len(price_series) - 1):
         context = list(price_series[i-CONTEXT_WINDOW:i])
         current_price = price_series[i]
@@ -49,6 +49,7 @@ def generate_training_samples(price_series: np.ndarray[Any, Any]) -> List[Tuple[
         avg_long = np.mean(price_series[i-CONTEXT_WINDOW:i])
         avg_short = np.mean(price_series[i-3:i])
 
+        event_data: Tuple[Optional[float], Optional[float]]
         if current_price < avg_short and avg_short < avg_long:
             event_type = "BUY"
             # AI: High-value regression targets
@@ -67,18 +68,18 @@ def generate_training_samples(price_series: np.ndarray[Any, Any]) -> List[Tuple[
 
 # --- Vectorization ---
 
-def vectorize_data(raw_data: List[Tuple[List[float], str, Any]], coerce_none_to_zero: bool) -> List[List[Any]]:
+def vectorize_data(raw_data: List[Tuple[List[float], str, Tuple[Optional[float], Optional[float]]]], coerce_none_to_zero: bool) -> List[List[Any]]:
     """
     AI: Vectorizes the raw data into sequences for the Transformer.
     Each sequence is [input_vector_t-1, input_vector_t, target_vector_for_t]
     """
     event_ids = [event_to_id[sample[1]] for sample in raw_data]
-    one_hot_encoder : OneHotEncoder = OneHotEncoder(categories=[range(NUM_EVENT_TYPES)], sparse_output=False).fit(np.array(event_ids).reshape(-1, 1)) # type: ignore
+    one_hot_encoder = OneHotEncoder(categories=[range(NUM_EVENT_TYPES)], sparse_output=False).fit(np.array(event_ids).reshape(-1, 1)) # type: ignore
     
     contexts = [sample[0] for sample in raw_data]
     context_scaler = StandardScaler().fit(contexts) # type: ignore
 
-    vectorized_sequences : list[Any] = []
+    vectorized_sequences: list[Any] = []
     
     # AI: Start from index 1 to ensure we always have a previous step (t-1) for context
     for i in range(1, len(raw_data)):
@@ -86,21 +87,21 @@ def vectorize_data(raw_data: List[Tuple[List[float], str, Any]], coerce_none_to_
         context_tm1, event_type_tm1, _ = raw_data[i-1]
 
         # --- Input vector for step 1 of the sequence (Time t-1) ---
-        scaled_context_tm1 = context_scaler.transform(np.array(context_tm1).reshape(1, -1)).flatten()
+        scaled_context_tm1 : np.ndarray[Any, Any] = context_scaler.transform(np.array(context_tm1).reshape(1, -1)).flatten() # type: ignore
         event_id_tm1 = event_to_id[event_type_tm1]
-        event_one_hot_tm1 = one_hot_encoder.transform([[event_id_tm1]]).flatten()
-        input_vector_tm1 = np.concatenate([scaled_context_tm1, event_one_hot_tm1])
+        event_one_hot_tm1 : np.ndarray[Any, Any] = one_hot_encoder.transform(np.array([[event_id_tm1]])).flatten() # type: ignore
+        input_vector_tm1 : np.ndarray[Any, Any] = np.concatenate([scaled_context_tm1, event_one_hot_tm1]) # type: ignore
         
         # --- Input vector for step 2 of the sequence (Time t) ---
-        scaled_context_t = context_scaler.transform(np.array(context_t).reshape(1, -1)).flatten()
+        scaled_context_t : np.ndarray[Any, Any] = context_scaler.transform(np.array(context_t).reshape(1, -1)).flatten() # type: ignore
         event_id_t = event_to_id[event_type_t]
-        event_one_hot_t = one_hot_encoder.transform([[event_id_t]]).flatten()
-        input_vector_t = np.concatenate([scaled_context_t, event_one_hot_t])
+        event_one_hot_t : np.ndarray[Any, Any] = one_hot_encoder.transform(np.array([[event_id_t]])).flatten() # type: ignore
+        input_vector_t : np.ndarray[Any, Any] = np.concatenate([scaled_context_t, event_one_hot_t]) # type: ignore
 
         # --- Target Vector (for time t) ---
-        target_class_one_hot = event_one_hot_t
+        target_class_one_hot : np.ndarray[Any, Any] = event_one_hot_t # type: ignore
         target_data_vector : np.ndarray[Any, Any] = np.full(MAX_DATA_VECTOR_SIZE, None, dtype=object)
-        if event_data_t is not None:
+        if event_data_t is not None: # type: ignore
             for j, val in enumerate(event_data_t):
                 target_data_vector[j] = val
 
@@ -108,9 +109,9 @@ def vectorize_data(raw_data: List[Tuple[List[float], str, Any]], coerce_none_to_
             # AI: This is where the data for the "bad" model is created.
             # AI: For 'HOLD' events, this forces the target to be [0.0, 0.0]
             # AI: For 'SELL' events, this forces the target to be [price, 0.0]
-            target_data_vector[target_data_vector == None] = 0.0
+            target_data_vector[target_data_vector == None] = 0.0 
 
-        target_vector = np.concatenate([target_class_one_hot, target_data_vector])
+        target_vector : np.ndarray[Any, Any] = np.concatenate([target_class_one_hot, target_data_vector]) # type: ignore
         
         sequence : list[Any] = [input_vector_tm1, input_vector_t, target_vector]
         vectorized_sequences.append(sequence)
@@ -147,7 +148,7 @@ if __name__ == "__main__":
     def print_sample_by_type(event_name : str):
         for i in range(len(raw_training_data)):
             if raw_training_data[i][1] == event_name:
-                print(f"\nSample '{event_name}' event:")
+                print(f"Sample '{event_name}' event:")
                 print(f"  Raw regression data: {raw_training_data[i][2]}")
                 # AI: Note: Indexing vectorized data at [i-1] because the loop starts at 1
                 correct_vec = TRAINING_DATA_WITH_CONTEXT_VECTORISED[i-1][2][NUM_EVENT_TYPES:]
