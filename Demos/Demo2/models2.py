@@ -54,7 +54,7 @@ D_MODEL = 32 # AI: Reverted to larger model
 NHEAD = 4    # AI: Reverted to larger model
 NUM_LAYERS = 2 # AI: Reverted to larger model
 
-EPOCHS = 1500 # AI: Increased epochs for better convergence
+EPOCHS = 1000 # AI: Increased epochs for better convergence
 LEARNING_RATE = 0.001 # AI: Adjusted learning rate for more stable training
 
 def prepare_data(vectorised_data: List[List[np.ndarray[Any, Any]]]) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
@@ -207,21 +207,50 @@ def vector_to_label(predicted_class_idx: int, predicted_data: np.ndarray[Any, An
         return "T" if predicted_data[final_bool_idx] > 0.5 else "F"
     return "Unknown"
 
+def get_relevant_indices_for_event(event_class_idx: int) -> Tuple[int, int]:
+    """
+    AI: Calculates the start and end slice indices for an event's data in the regression vector.
+    """
+    start_idx = 0
+    for i in range(event_class_idx):
+        start_idx += get_vectorizer_output_length(events_id_list[i])
+    
+    length = get_vectorizer_output_length(events_id_list[event_class_idx])
+    return start_idx, start_idx + length
+
 def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     model.eval()
     actual_labels: list[str] = []
     predicted_labels: list[str] = []
+    targeted_mses: list[float] = []
 
     with torch.no_grad():
         for context, target_class, target_data in data:
             class_pred, data_pred = model(context.unsqueeze(0))
             
             pred_class_idx = int(torch.argmax(class_pred.squeeze(0)).item())
-            pred_data_np: np.ndarray[Any, Any] = data_pred.squeeze(0).cpu().numpy()
+            pred_data_squeezed = data_pred.squeeze(0)
 
             actual_class_idx = int(target_class.item())
-            actual_data_np: np.ndarray[Any, Any] = target_data.cpu().numpy()
             
+            # AI: Calculate Targeted MSE
+            start, end = get_relevant_indices_for_event(actual_class_idx)
+            if end > start: # AI: Only if there is regression data for this event
+                relevant_preds = pred_data_squeezed[start:end]
+                relevant_targets = target_data[start:end]
+
+                # AI: Ensure we don't compare against NaN in the correct "WITH CONTEXT" case
+                mask = ~torch.isnan(relevant_targets)
+                if mask.any():
+                    mse = nn.functional.mse_loss(
+                        torch.masked_select(relevant_preds, mask),
+                        torch.masked_select(relevant_targets, mask)
+                    ).item()
+                    targeted_mses.append(float(mse))
+
+            # AI: Get string labels for classification metrics
+            pred_data_np: np.ndarray[Any, Any] = pred_data_squeezed.cpu().numpy()
+            actual_data_np: np.ndarray[Any, Any] = target_data.cpu().numpy()
             predicted_labels.append(vector_to_label(pred_class_idx, pred_data_np))
             actual_labels.append(vector_to_label(actual_class_idx, actual_data_np))
     
@@ -245,6 +274,10 @@ def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor
         print(row_str)
     
     print(f"Accuracy: {acc:.4f} ({int(acc * len(actual_labels))}/{len(actual_labels)})")
+    
+    if targeted_mses:
+        avg_targeted_mse = np.mean(targeted_mses)
+        print(f"Average Targeted MSE (on relevant data only): {avg_targeted_mse:.6f}")
 
 def main():
     """
@@ -265,14 +298,14 @@ def main():
     evaluate_model(model_with_context, data_with_context)
     print("-" * 40)
 
-    # --- WITHOUT CONTEXT ---
-    # performance should be ok
-    print("\nTraining model WITHOUT context...")
-    model_without_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
-    train_model(model_without_context, data_without_context)
-    print("Evaluating model WITHOUT context...")
-    evaluate_model(model_without_context, data_without_context)
-    print("-" * 40)
+    # # --- WITHOUT CONTEXT ---
+    # # performance should be ok
+    # print("\nTraining model WITHOUT context...")
+    # model_without_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
+    # train_model(model_without_context, data_without_context)
+    # print("Evaluating model WITHOUT context...")
+    # evaluate_model(model_without_context, data_without_context)
+    # print("-" * 40)
 
 
     # --- WITH CONTEXT BUT WITHOUT BACKPROP NONE VALUES ---
