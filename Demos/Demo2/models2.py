@@ -69,12 +69,12 @@ def prepare_data(vectorised_data: List[List[np.ndarray[Any, Any]]]) -> List[Tupl
         
         # AI: Process context (inputs): replace None with 0
         context_np = sequence_np[:2, :].copy()
-        context_np[context_np == None] = 0.0
+        context_np[context_np == None] = 0.0  # type: ignore
         context_tensor = torch.tensor(context_np.astype(np.float32))
 
         # AI: Process target: replace None with NaN for loss calculation
         target_np = sequence_np[2, :].copy()
-        target_np[target_np == None] = np.nan
+        target_np[target_np == None] = np.nan  # type: ignore
         target_tensor = torch.tensor(target_np.astype(np.float32))
         
         # AI: The one-hot encoding part of the target should be clean of NaNs, but this is safer.
@@ -148,7 +148,7 @@ def hybrid_loss(class_pred: torch.Tensor, data_pred: torch.Tensor,
         data_loss = nn.functional.mse_loss(data_pred_masked, target_data_masked)
         
     # AI: Weighting data_loss to prevent it from overwhelming classification loss.
-    return class_loss + 0.1 * data_loss
+    return class_loss + 1.0 * data_loss
 
 def train_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
@@ -275,7 +275,7 @@ def main():
     print("-" * 40)
 
 
-    # --- WITHOUT BACKPROP NONE VALUES ---
+    # --- WITH CONTEXT BUT WITHOUT BACKPROP NONE VALUES ---
     # performance should be bad
     print("\nTraining model WITHOUT BACKPROP NONE VALUES...")
     model_without_backprop_none_values = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
