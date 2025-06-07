@@ -8,10 +8,12 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.model_selection import train_test_split
 from typing import List, Tuple, Any
 import sys, os
 import random
 import math
+import copy
 
 # AI: Set random seeds for reproducibility
 random.seed(42)
@@ -48,7 +50,7 @@ NUM_EVENT_TYPES = len(events_id_list)
 D_MODEL = 64
 NHEAD = 4
 NUM_LAYERS = 2
-EPOCHS = 1000
+EPOCHS = 20000
 LEARNING_RATE = 0.001
 
 def prepare_data(vectorised_data: List[List[np.ndarray[Any, Any]]]) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
@@ -125,27 +127,63 @@ def hybrid_loss(class_pred: torch.Tensor, data_pred: torch.Tensor,
         
     return class_loss + 1.0 * data_loss # AI: Simplified weight for demo
 
-def train_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
+def train_model(model: nn.Module, train_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]], val_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]], patience: int = 100):
+    """
+    AI: Trains the model using the provided data, with early stopping based on validation loss.
+    """
     optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
-    model.train()
+    
+    # --- Early Stopping Setup ---
+    best_val_loss = float('inf')
+    epochs_no_improve = 0
+    best_model_wts = copy.deepcopy(model.state_dict())
 
-    contexts = torch.stack([item[0] for item in data])
-    target_classes = torch.stack([item[1] for item in data])
-    target_datas = torch.stack([item[2] for item in data])
+    # --- Prepare data Tensors ---
+    train_contexts = torch.stack([item[0] for item in train_data])
+    train_target_classes = torch.stack([item[1] for item in train_data])
+    train_target_datas = torch.stack([item[2] for item in train_data])
+
+    val_contexts = torch.stack([item[0] for item in val_data])
+    val_target_classes = torch.stack([item[1] for item in val_data])
+    val_target_datas = torch.stack([item[2] for item in val_data])
 
     for epoch in range(EPOCHS):
+        # --- Training Phase ---
+        model.train()
         optimizer.zero_grad()
-        class_pred, data_pred = model(contexts)
-        loss = hybrid_loss(class_pred, data_pred, target_classes, target_datas)
+        class_pred, data_pred = model(train_contexts)
+        train_loss = hybrid_loss(class_pred, data_pred, train_target_classes, train_target_datas)
 
-        if epoch > 0 and (epoch % 100 == 0 or epoch == EPOCHS - 1):
-            print(f"Epoch {epoch}, Loss: {loss.item()}")
-
-        if not torch.isnan(loss):
-            loss.backward()
+        if not torch.isnan(train_loss):
+            train_loss.backward()
             optimizer.step()
             scheduler.step()
+
+        # --- Validation Phase ---
+        model.eval()
+        with torch.no_grad():
+            val_class_pred, val_data_pred = model(val_contexts)
+            val_loss = hybrid_loss(val_class_pred, val_data_pred, val_target_classes, val_target_datas)
+
+        if epoch > 0 and (epoch % 100 == 0 or epoch == EPOCHS -1):
+            print(f"Epoch {epoch}, Train Loss: {train_loss.item():.4f}, Val Loss: {val_loss.item():.4f}")
+
+        # --- Early Stopping Check ---
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            epochs_no_improve = 0
+            best_model_wts = copy.deepcopy(model.state_dict())
+        else:
+            epochs_no_improve += 1
+
+        if epochs_no_improve >= patience:
+            print(f"\nEarly stopping triggered at epoch {epoch}. Best Val Loss: {best_val_loss:.4f}")
+            break
+            
+    # --- Load best model weights ---
+    print("\nFinished training. Restoring best model weights.")
+    model.load_state_dict(best_model_wts)
 
 def get_relevant_indices_for_event(event_class_idx: int) -> Tuple[int, int]:
     start_idx = 0
@@ -215,23 +253,29 @@ def main():
     data_with_context = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED)
     data_with_context_coercion = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION)
 
+    # --- Split data into training and validation sets ---
+    # AI: Use a fixed random state for reproducibility. Shuffle is False as data has a time component.
+    train_data_wc, val_data_wc = train_test_split(data_with_context, test_size=0.2, random_state=42, shuffle=False)
+    train_data_woc, val_data_woc = train_test_split(data_with_context_coercion, test_size=0.2, random_state=42, shuffle=False)
+    print(f"Data split into {len(train_data_wc)} training samples and {len(val_data_wc)} validation samples.")
+
     print("\n--- Training model WITH CONTEXT (Correct Masking) ---")
     model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
-    train_model(model_with_context, data_with_context)
-    print("\nEvaluating model WITH CONTEXT...")
-    mse_with_context = evaluate_model(model_with_context, data_with_context)
+    train_model(model_with_context, train_data_wc, val_data_wc)
+    print("\nEvaluating model WITH CONTEXT on validation data...")
+    mse_with_context = evaluate_model(model_with_context, val_data_wc)
     print("-" * 50)
 
     print("\n--- Training model WITH COERCED ZEROS (Incorrect) ---")
     model_without_backprop = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
-    train_model(model_without_backprop, data_with_context_coercion)
-    print("\nEvaluating model WITH COERCED ZEROS...")
-    mse_without_backprop = evaluate_model(model_without_backprop, data_with_context_coercion)
+    train_model(model_without_backprop, train_data_woc, val_data_woc)
+    print("\nEvaluating model WITH COERCED ZEROS on validation data...")
+    mse_without_backprop = evaluate_model(model_without_backprop, val_data_woc)
     print("-" * 50)
 
     print("\n--- Final Quantitative Check ---")
-    print(f"Correct Model (Masking) Targeted MSE:   {mse_with_context:.4f}")
-    print(f"Incorrect Model (Coercion) Targeted MSE: {mse_without_backprop:.4f}")
+    print(f"Correct Model (Masking) Targeted MSE:   {mse_with_context}")
+    print(f"Incorrect Model (Coercion) Targeted MSE: {mse_without_backprop}")
 
     if np.isnan(mse_with_context) or np.isnan(mse_without_backprop):
         print("\nCHECK SKIPPED: Could not retrieve MSE values.")
