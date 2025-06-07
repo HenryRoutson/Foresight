@@ -52,7 +52,7 @@ D_MODEL = 32 # AI: Reverted to larger model
 NHEAD = 4    # AI: Reverted to larger model
 NUM_LAYERS = 2 # AI: Reverted to larger model
 
-EPOCHS = 1000 # AI: Increased epochs for better convergence
+EPOCHS = 1500 # AI: Increased epochs for better convergence
 LEARNING_RATE = 0.001 # AI: Adjusted learning rate for more stable training
 
 def prepare_data(vectorised_data: List[List[np.ndarray[Any, Any]]]) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:

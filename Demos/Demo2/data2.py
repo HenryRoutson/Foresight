@@ -32,10 +32,12 @@ class Event(TypedDict):
 # note that the dict structure should be the same if the event id is the same,
 # TODO impliment a run time validation of this
 
+# TODO need to support lists in context
+
 A_none_dict : Event = { "id" : event_id_t("A"), "id_debug" : "A", "context" : {} }
 B_none_dict : Event = { "id" : event_id_t("B_without_context"), "id_debug" : "B", "context" : {} }
-B_false_dict : Event = { "id" : event_id_t("B_with_context"), "id_debug" : "F", "context" : { "bool_data" : False, "more_bool_data" : False }}
-B_true_dict : Event  = { "id" : event_id_t("B_with_context"), "id_debug" : "T", "context" : { "bool_data" : True, "more_bool_data" : True }}
+B_false_dict : Event = { "id" : event_id_t("B_with_context"), "id_debug" : "F", "context" : { "bool_data" : False, "float_data" : 6.3, "int_data" : 2 }}
+B_true_dict : Event  = { "id" : event_id_t("B_with_context"), "id_debug" : "T", "context" : { "bool_data" : True, "float_data" : -0.5, "int_data" : 5}}
 
 
 TRAINING_DATA_WITH_CONTEXT : list[list[Event]] = [
