@@ -2,7 +2,7 @@
 
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Optional
 
 # --- Configuration ---
 # AI: Increased sample count and context window to create a more complex task
@@ -20,7 +20,7 @@ MAX_DATA_VECTOR_SIZE = 2
 
 # --- Data Generation ---
 
-def generate_price_series(length: int) -> np.ndarray:
+def generate_price_series(length: int) -> np.ndarray[Any, Any]:
     """
     AI: Generates a more complex synthetic price series to provide richer context.
     """
@@ -33,7 +33,7 @@ def generate_price_series(length: int) -> np.ndarray:
     seasonality2 = 8 * np.sin(np.linspace(0, 2 * np.pi * 25, length))
     return base_price + noise + trend + seasonality1 + seasonality2
 
-def generate_training_samples(price_series: np.ndarray) -> List[Tuple[List[float], str, Any]]:
+def generate_training_samples(price_series: np.ndarray[Any, Any]) -> List[Tuple[List[float], str, Any]]:
     """
     AI: Generates training samples based on rules that create conflicting regression targets.
     - 'BUY'/'SELL' events have high-value regression targets (~150-200).
@@ -73,12 +73,12 @@ def vectorize_data(raw_data: List[Tuple[List[float], str, Any]], coerce_none_to_
     Each sequence is [input_vector_t-1, input_vector_t, target_vector_for_t]
     """
     event_ids = [event_to_id[sample[1]] for sample in raw_data]
-    one_hot_encoder = OneHotEncoder(categories=[range(NUM_EVENT_TYPES)], sparse_output=False).fit(np.array(event_ids).reshape(-1, 1))
+    one_hot_encoder : OneHotEncoder = OneHotEncoder(categories=[range(NUM_EVENT_TYPES)], sparse_output=False).fit(np.array(event_ids).reshape(-1, 1)) # type: ignore
     
     contexts = [sample[0] for sample in raw_data]
-    context_scaler = StandardScaler().fit(contexts)
+    context_scaler = StandardScaler().fit(contexts) # type: ignore
 
-    vectorized_sequences = []
+    vectorized_sequences : list[Any] = []
     
     # AI: Start from index 1 to ensure we always have a previous step (t-1) for context
     for i in range(1, len(raw_data)):
@@ -99,7 +99,7 @@ def vectorize_data(raw_data: List[Tuple[List[float], str, Any]], coerce_none_to_
 
         # --- Target Vector (for time t) ---
         target_class_one_hot = event_one_hot_t
-        target_data_vector = np.full(MAX_DATA_VECTOR_SIZE, None, dtype=object)
+        target_data_vector : np.ndarray[Any, Any] = np.full(MAX_DATA_VECTOR_SIZE, None, dtype=object)
         if event_data_t is not None:
             for j, val in enumerate(event_data_t):
                 target_data_vector[j] = val
@@ -112,7 +112,7 @@ def vectorize_data(raw_data: List[Tuple[List[float], str, Any]], coerce_none_to_
 
         target_vector = np.concatenate([target_class_one_hot, target_data_vector])
         
-        sequence = [input_vector_tm1, input_vector_t, target_vector]
+        sequence : list[Any] = [input_vector_tm1, input_vector_t, target_vector]
         vectorized_sequences.append(sequence)
         
     return vectorized_sequences
@@ -144,7 +144,7 @@ if __name__ == "__main__":
     print(f"Generated {len(TRAINING_DATA_WITH_CONTEXT_VECTORISED)} training sequences.")
     
     # AI: Helper to find and print a sample of a given event type
-    def print_sample_by_type(event_name):
+    def print_sample_by_type(event_name : str):
         for i in range(len(raw_training_data)):
             if raw_training_data[i][1] == event_name:
                 print(f"\nSample '{event_name}' event:")
