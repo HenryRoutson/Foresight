@@ -2,7 +2,7 @@
 
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from typing import List, Tuple, Any, Optional
+from typing import List, Tuple, Any, Optional, NewType, TypedDict
 
 # --- Configuration ---
 # AI: Increased sample count and context window to create a more complex task
@@ -11,12 +11,25 @@ CONTEXT_WINDOW = 10
 PRICE_SERIES_LENGTH = NUM_SAMPLES + CONTEXT_WINDOW + 2
 
 # Event IDs
-events_id_list = ["BUY", "SELL", "HOLD"]
-event_to_id = {event: i for i, event in enumerate(events_id_list)}
+
+event_id_t = NewType("event_id_t", str)
+
+events_id_list : list[event_id_t] = [event_id_t("BUY"), event_id_t("SELL"), event_id_t("HOLD")]
+event_to_id : dict[event_id_t, int] = {event: i for i, event in enumerate(events_id_list)}
 NUM_EVENT_TYPES = len(events_id_list)
 
 # AI: The regression vector must be large enough for the 'BUY' event's data (target_price, stop_loss)
 MAX_DATA_VECTOR_SIZE = 2
+
+
+
+# TODO the model is not yet using this
+class Event(TypedDict):
+    id: event_id_t
+    context : dict[str, Any]
+
+
+
 
 # --- Data Generation ---
 
