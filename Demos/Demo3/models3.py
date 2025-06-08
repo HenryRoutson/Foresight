@@ -16,6 +16,9 @@ import math
 import copy
 from scipy.stats import ttest_ind # type: ignore # AI: Consider `pip install types-scipy` to remove this ignore
 
+# AI: Add project root to path to resolve import errors
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+
 # AI: Set random seeds for reproducibility
 random.seed(42)
 np.random.seed(42)
@@ -25,7 +28,7 @@ torch.manual_seed(42)
 original_stdout = sys.stdout
 sys.stdout = open(os.devnull, 'w')
 try:
-    from .data3 import (
+    from Demos.Demo3.data3 import (
         TRAINING_DATA_WITH_CONTEXT_VECTORISED,
         TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION,
         events_id_list,
@@ -33,6 +36,7 @@ try:
         get_vector_sizes
     )
 except (ImportError, ModuleNotFoundError):
+    # AI: This fallback is now less likely to be needed but kept for robustness.
     from Demos.Demo3.data3 import (
         TRAINING_DATA_WITH_CONTEXT_VECTORISED,
         TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION,
@@ -226,11 +230,13 @@ def get_relevant_indices_for_event(event_class_idx: int) -> Tuple[int, int]:
     length = get_vectorizer_output_length(events_id_list[event_class_idx])
     return start_idx, start_idx + length
 
-def evaluate_model(model: nn.Module, data: DataType) -> float:
+def evaluate_model(model: nn.Module, data: DataType) -> Dict[str, Any]:
     model.eval()
     all_pred_class_idx: list[int] = []
     all_actual_class_idx: list[int] = []
     targeted_mses: list[float] = []
+    all_data_preds: list[np.ndarray] = []
+    all_target_datas: list[np.ndarray] = []
 
     with torch.no_grad():
         for context, target_class, target_data in data:
@@ -241,6 +247,9 @@ def evaluate_model(model: nn.Module, data: DataType) -> float:
             
             all_pred_class_idx.append(pred_class_idx)
             all_actual_class_idx.append(actual_class_idx)
+            
+            all_data_preds.append(data_pred.squeeze(0).cpu().numpy())
+            all_target_datas.append(target_data.cpu().numpy())
 
             start, end = get_relevant_indices_for_event(actual_class_idx)
             if end > start:
@@ -279,13 +288,17 @@ def evaluate_model(model: nn.Module, data: DataType) -> float:
         avg_targeted_mse = float(np.mean(targeted_mses))
         print(f"Average Targeted MSE (on relevant data only): {avg_targeted_mse:.4f}")
 
-    return avg_targeted_mse
+    return {
+        'mse': avg_targeted_mse,
+        'predictions': all_data_preds,
+        'targets': all_target_datas
+    }
 
 def run_single_experiment(
     train_data_wc: DataType, val_data_wc: DataType, 
     train_data_woc: DataType, val_data_woc: DataType,
     capture_learning_curves: bool = False
-) -> Tuple[float, float, int, int, dict[str, list[float]], dict[str, list[float]]]:
+) -> Tuple[float, float, int, int, dict[str, list[float]], dict[str, list[float]], Dict[str, Any], Dict[str, Any]]:
     """
     AI: Runs one full training and evaluation cycle for both models and returns their MSE and best epoch.
     Optionally captures and returns learning curves.
@@ -297,18 +310,20 @@ def run_single_experiment(
     print("Training model WITH CONTEXT (Correct Masking)...")
     epochs_correct, curves_correct = train_model(model_with_context, train_data_wc, val_data_wc, capture_learning_curves=capture_learning_curves)
     print("Evaluating model WITH CONTEXT...")
-    mse_with_context = evaluate_model(model_with_context, val_data_wc)
+    eval_results_correct = evaluate_model(model_with_context, val_data_wc)
+    mse_with_context = float('nan' if eval_results_correct['mse'] is None else eval_results_correct['mse'])
 
     # --- Train and evaluate the model with incorrect coercion ---
     model_without_backprop = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
     print("\nTraining model WITH COERCED ZEROS (Incorrect)...")
     epochs_incorrect, curves_incorrect = train_model(model_without_backprop, train_data_woc, val_data_woc, capture_learning_curves=capture_learning_curves)
     print("Evaluating model WITH COERCED ZEROS...")
-    mse_without_backprop = evaluate_model(model_without_backprop, val_data_woc)
+    eval_results_incorrect = evaluate_model(model_without_backprop, val_data_woc)
+    mse_without_backprop = float('nan' if eval_results_incorrect['mse'] is None else eval_results_incorrect['mse'])
     
     print(f"Trial Results -> Correct MSE: {mse_with_context:.4f} (at epoch {epochs_correct}), Incorrect MSE: {mse_without_backprop:.4f} (at epoch {epochs_incorrect})")
     
-    return mse_with_context, mse_without_backprop, epochs_correct, epochs_incorrect, curves_correct, curves_incorrect
+    return mse_with_context, mse_without_backprop, epochs_correct, epochs_incorrect, curves_correct, curves_incorrect, eval_results_correct, eval_results_incorrect
 
 def main():
     print("Preparing data...")
@@ -322,6 +337,8 @@ def main():
     epochs_incorrect_list: list[int] = []
     all_curves_correct: list[dict[str, list[float]]] = []
     all_curves_incorrect: list[dict[str, list[float]]] = []
+    all_evals_correct: list[Dict[str, Any]] = []
+    all_evals_incorrect: list[Dict[str, Any]] = []
 
     print(f"\nRunning {num_trials} trials...")
     for i in range(num_trials):
@@ -338,7 +355,12 @@ def main():
         print(f"Data re-split for Trial {i+1} with seed {trial_seed}. Train size: {len(train_data_wc)}, Val size: {len(val_data_wc)}")
 
         capture_curves = True
-        mse_correct, mse_incorrect, epochs_correct, epochs_incorrect, curves_correct, curves_incorrect = run_single_experiment(
+        (
+            mse_correct, mse_incorrect, 
+            epochs_correct, epochs_incorrect, 
+            curves_correct, curves_incorrect, 
+            eval_correct, eval_incorrect
+        ) = run_single_experiment(
             train_data_wc, val_data_wc, train_data_woc, val_data_woc, capture_learning_curves=capture_curves
         )
         if not (np.isnan(mse_correct) or np.isnan(mse_incorrect)):
@@ -349,12 +371,14 @@ def main():
             if capture_curves:
                 all_curves_correct.append(curves_correct)
                 all_curves_incorrect.append(curves_incorrect)
+            all_evals_correct.append(eval_correct)
+            all_evals_incorrect.append(eval_incorrect)
     
     # --- Statistical Analysis ---
-    mean_correct = float(np.mean(results_correct))
-    std_correct = float(np.std(results_correct))
-    mean_incorrect = float(np.mean(results_incorrect))
-    std_incorrect = float(np.std(results_incorrect))
+    mean_correct = float(np.mean(results_correct)) if results_correct else float('nan')
+    std_correct = float(np.std(results_correct)) if results_correct else float('nan')
+    mean_incorrect = float(np.mean(results_incorrect)) if results_incorrect else float('nan')
+    std_incorrect = float(np.std(results_incorrect)) if results_incorrect else float('nan')
 
     print(f"Correct Model (Masking) MSE -> Mean: {mean_correct:.4f}, Std: {std_correct:.4f}")
     print(f"Incorrect Model (Coercion) MSE -> Mean: {mean_incorrect:.4f}, Std: {std_incorrect:.4f}")
@@ -379,14 +403,16 @@ def main():
             "epochs": epochs_correct_list,
             "mean_mse": mean_correct,
             "std_mse": std_correct,
-            "all_learning_curves": all_curves_correct
+            "all_learning_curves": all_curves_correct,
+            "all_evaluations": all_evals_correct
         },
         "incorrect_model": {
             "mse_results": results_incorrect,
             "epochs": epochs_incorrect_list,
             "mean_mse": mean_incorrect,
             "std_mse": std_incorrect,
-            "all_learning_curves": all_curves_incorrect
+            "all_learning_curves": all_curves_incorrect,
+            "all_evaluations": all_evals_incorrect
         },
         "t_test": {
             "statistic": t_stat,

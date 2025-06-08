@@ -1,32 +1,17 @@
 
 
 
-json takes up a lot of space, 
-change it to some np file which is more space efficient and add it to the gitignore
 
 
 
-
-use the number of epochs as another axis 
 
 demo 3 needs to use Event , i am not sure it is working correcly
-
-
-
-show how the average prediction for Coercion model is closer to 0
-  do on a scatter plot each index in the embedded vector
-
-
-
 
 
 
 What the fuck is the new result and 
 prepare_data is doing some strange stuff to the data like setting to 0
 
-
-
-Create example of coerrcing values to zero
 
 
 
