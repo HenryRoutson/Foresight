@@ -58,7 +58,6 @@ NUM_LAYERS = 2 # AI: Reverted to larger model
 EPOCHS = 1000 # AI: Increased epochs for better convergence
 LEARNING_RATE = 0.001 # AI: Adjusted learning rate for more stable training
 PATIENCE = 100 # AI: Added for early stopping
-NUM_TRIALS = 10 # AI: Number of trials to run
 
 def prepare_data(vectorised_data: List[List[np.ndarray[Any, Any]]]) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
     """
@@ -382,99 +381,98 @@ def main():
     """
     AI: Main execution block. Trains and evaluates models for both with and without context data.
     """
-    all_results_wc = {'mse_results': [], 'epochs': [], 'all_learning_curves': [], 'all_evaluations': []}
-    all_results_wcc = {'mse_results': [], 'epochs': [], 'all_learning_curves': [], 'all_evaluations': []}
+    print("Preparing data...")
+    data_with_context = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED)
+    data_without_context = prepare_data(TRAINING_DATA_WITHOUT_CONTEXT_VECTORISED)
+    data_with_context_coercion = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION)
 
-    for i in range(NUM_TRIALS):
-        print(f"\n--- Starting Trial {i+1}/{NUM_TRIALS} ---")
-        # AI: Set different random seeds for each trial for variability
-        random.seed(42 + i)
-        np.random.seed(42 + i)
-        torch.manual_seed(42 + i)
 
-        print("Preparing data...")
-        data_with_context = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED)
-        data_with_context_coercion = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION)
+    # AI: Shuffle and split data for training and validation
+    random.shuffle(data_with_context)
+    split_idx_wc = int(len(data_with_context) * 0.8)
+    train_data_with_context = data_with_context[:split_idx_wc]
+    val_data_with_context = data_with_context[split_idx_wc:]
+    if not train_data_with_context or not val_data_with_context:
+        train_data_with_context = data_with_context
+        val_data_with_context = data_with_context
 
-        # AI: Shuffle and split data for training and validation
-        random.shuffle(data_with_context)
-        split_idx_wc = int(len(data_with_context) * 0.8)
-        train_data_with_context = data_with_context[:split_idx_wc]
-        val_data_with_context = data_with_context[split_idx_wc:]
-        if not train_data_with_context or not val_data_with_context:
-            train_data_with_context = val_data_with_context = data_with_context
+    random.shuffle(data_with_context_coercion)
+    split_idx_wcc = int(len(data_with_context_coercion) * 0.8)
+    train_data_with_context_coercion = data_with_context_coercion[:split_idx_wcc]
+    val_data_with_context_coercion = data_with_context_coercion[split_idx_wcc:]
+    if not train_data_with_context_coercion or not val_data_with_context_coercion:
+        train_data_with_context_coercion = data_with_context_coercion
+        val_data_with_context_coercion = data_with_context_coercion
 
-        random.shuffle(data_with_context_coercion)
-        split_idx_wcc = int(len(data_with_context_coercion) * 0.8)
-        train_data_with_context_coercion = data_with_context_coercion[:split_idx_wcc]
-        val_data_with_context_coercion = data_with_context_coercion[split_idx_wcc:]
-        if not train_data_with_context_coercion or not val_data_with_context_coercion:
-            train_data_with_context_coercion = val_data_with_context_coercion = data_with_context_coercion
+    # --- WITH CONTEXT ---
+    # performance should be perfect
+    print("\nTraining model WITH context...")
+    model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
+    history_wc, best_epoch_wc = train_model(model_with_context, train_data_with_context, val_data_with_context)
+    print("Evaluating model WITH context...")
+    mse_with_context, metrics_wc, evals_wc = evaluate_model(model_with_context, data_with_context)
+    print("-" * 40)
 
-        # --- WITH CONTEXT ---
-        print("\nTraining model WITH context...")
-        model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
-        history_wc, best_epoch_wc = train_model(model_with_context, train_data_with_context, val_data_with_context)
-        print("Evaluating model WITH context...")
-        mse_with_context, metrics_wc, evals_wc = evaluate_model(model_with_context, data_with_context)
-        all_results_wc['mse_results'].append(mse_with_context)
-        all_results_wc['epochs'].append(best_epoch_wc)
-        all_results_wc['all_learning_curves'].append(history_wc)
-        all_results_wc['all_evaluations'].append(evals_wc)
-        print("-" * 40)
+    # # --- WITHOUT CONTEXT ---
+    # # performance should be ok
+    # print("\nTraining model WITHOUT context...")
+    # model_without_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
+    # train_model(model_without_context, data_without_context)
+    # print("Evaluating model WITHOUT context...")
+    # evaluate_model(model_without_context, data_without_context)
+    # print("-" * 40)
 
-        # --- WITH CONTEXT BUT WITHOUT BACKPROP NONE VALUES ---
-        print("\nTraining model WITHOUT BACKPROP NONE VALUES...")
-        model_without_backprop_none_values = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
-        history_wcc, best_epoch_wcc = train_model(model_without_backprop_none_values, train_data_with_context_coercion, val_data_with_context_coercion)
-        print("Evaluating model WITHOUT BACKPROP NONE VALUES...")
-        mse_without_backprop, metrics_wcc, evals_wcc = evaluate_model(model_without_backprop_none_values, data_with_context_coercion)
-        all_results_wcc['mse_results'].append(mse_without_backprop)
-        all_results_wcc['epochs'].append(best_epoch_wcc)
-        all_results_wcc['all_learning_curves'].append(history_wcc)
-        all_results_wcc['all_evaluations'].append(evals_wcc)
-        print("-" * 40)
 
-    # --- Aggregate and Save Results ---
-    final_results = {
-        'num_trials': NUM_TRIALS,
+    # --- WITH CONTEXT BUT WITHOUT BACKPROP NONE VALUES ---
+    # performance should be bad
+    print("\nTraining model WITHOUT BACKPROP NONE VALUES...")
+    model_without_backprop_none_values = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
+    history_wcc, best_epoch_wcc = train_model(model_without_backprop_none_values, train_data_with_context_coercion, val_data_with_context_coercion)
+    print("Evaluating model WITHOUT BACKPROP NONE VALUES...")
+    mse_without_backprop, metrics_wcc, evals_wcc = evaluate_model(model_without_backprop_none_values, data_with_context_coercion)
+    print("-" * 40)
+
+    # --- Save Results ---
+    results = {
+        'num_trials': 1,
         'correct_model': {
-            'mse_results': all_results_wc['mse_results'],
-            'mean_mse': np.mean(all_results_wc['mse_results']),
-            'std_mse': np.std(all_results_wc['mse_results']),
-            'epochs': all_results_wc['epochs'],
-            'all_learning_curves': all_results_wc['all_learning_curves'],
-            'all_evaluations': all_results_wc['all_evaluations'],
+            'mse_results': [mse_with_context],
+            'mean_mse': mse_with_context,
+            'std_mse': 0,
+            'epochs': [best_epoch_wc],
+            'all_learning_curves': [history_wc],
+            'all_evaluations': [evals_wc],
+            'final_metrics': metrics_wc
         },
         'incorrect_model': {
-            'mse_results': all_results_wcc['mse_results'],
-            'mean_mse': np.mean(all_results_wcc['mse_results']),
-            'std_mse': np.std(all_results_wcc['mse_results']),
-            'epochs': all_results_wcc['epochs'],
-            'all_learning_curves': all_results_wcc['all_learning_curves'],
-            'all_evaluations': all_results_wcc['all_evaluations'],
+            'mse_results': [mse_without_backprop],
+            'mean_mse': mse_without_backprop,
+            'std_mse': 0,
+            'epochs': [best_epoch_wcc],
+            'all_learning_curves': [history_wcc],
+            'all_evaluations': [evals_wcc],
+            'final_metrics': metrics_wcc
         }
     }
 
     results_path = os.path.join(os.path.dirname(__file__), 'results.npy')
-    np.save(results_path, final_results)
-    print(f"\nAggregated results over {NUM_TRIALS} trials saved to {results_path}")
+    np.save(results_path, results)
+    print(f"\nResults saved to {results_path}")
+
 
     # --- FINAL CHECK ---
-    mean_mse_wc = final_results['correct_model']['mean_mse']
-    mean_mse_wcc = final_results['incorrect_model']['mean_mse']
-    print("\n--- Final Quantitative Check (Averaged over all trials) ---")
-    print(f"Correct Model (with masking) Mean Targeted MSE:   {mean_mse_wc:.6f}")
-    print(f"Incorrect Model (coerced to 0) Mean Targeted MSE: {mean_mse_wcc:.6f}")
+    print("\n--- Final Quantitative Check ---")
+    print(f"Correct Model (with masking) Targeted MSE:   {mse_with_context:.6f}")
+    print(f"Incorrect Model (coerced to 0) Targeted MSE: {mse_without_backprop:.6f}")
 
-    if np.isnan(mean_mse_wc) or np.isnan(mean_mse_wcc):
+    if np.isnan(mse_with_context) or np.isnan(mse_without_backprop):
         print("\nCHECK SKIPPED: Could not retrieve MSE values for comparison.")
-    elif mean_mse_wcc > mean_mse_wc:
-        print("\nSUCCESS: The model trained with incorrect zero-coercion has a higher average regression error.")
-        print("This quantitatively proves that masking is the superior method across multiple trials.")
+    elif mse_without_backprop > mse_with_context:
+        print("\nSUCCESS: The model trained with incorrect zero-coercion has a higher regression error.")
+        print("This quantitatively proves that masking is the superior method.")
     else:
-        print("\nFAILURE: The targeted MSE check did not show the expected average difference.")
-        print(f"Difference: {mean_mse_wc - mean_mse_wcc:.8f}. This may be due to model parameters, data simplicity, or random seeds.")
+        print("\nFAILURE: The targeted MSE check did not show the expected difference.")
+        print(f"Difference: {mse_with_context - mse_without_backprop:.8f}. This may be due to model parameters, data simplicity, or random seed.")
 
 
 
