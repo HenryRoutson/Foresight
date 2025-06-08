@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.metrics import confusion_matrix, accuracy_score
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Dict
 import sys, os
 import random
 import math
@@ -152,13 +152,15 @@ def hybrid_loss(class_pred: torch.Tensor, data_pred: torch.Tensor,
     # AI: Weighting data_loss to prevent it from overwhelming classification loss.
     return class_loss + 1.0 * data_loss
 
-def train_model(model: nn.Module, train_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]], val_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
+def train_model(model: nn.Module, train_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]], val_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]) -> Tuple[Dict[str, List[Any]], int]:
     optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
     
     best_val_loss = float('inf')
     patience_counter = 0
     best_model_state = None
+    best_epoch = 0
+    history: Dict[str, List[Any]] = {'epochs': [], 'train_loss': [], 'val_loss': [], 'train_mse': [], 'val_mse': []}
 
     # AI: Collate data into a single batch for stable training
     train_contexts = torch.stack([item[0] for item in train_data])
@@ -180,19 +182,29 @@ def train_model(model: nn.Module, train_data: List[Tuple[torch.Tensor, torch.Ten
             optimizer.step()
             scheduler.step()
 
-        # AI: Validation phase
+        # AI: Validation and metrics phase
         model.eval()
         with torch.no_grad():
+            train_mse = calculate_targeted_mse(class_pred, data_pred, train_target_classes, train_target_datas)
+            
             val_class_pred, val_data_pred = model(val_contexts)
             val_loss = hybrid_loss(val_class_pred, val_data_pred, val_target_classes, val_target_datas)
+            val_mse = calculate_targeted_mse(val_class_pred, val_data_pred, val_target_classes, val_target_datas)
+
+        history['epochs'].append(epoch)
+        history['train_loss'].append(loss.item())
+        history['val_loss'].append(val_loss.item())
+        history['train_mse'].append(train_mse)
+        history['val_mse'].append(val_mse)
 
         if epoch > 0 and epoch % 100 == 0:
-            print(f"Epoch {epoch}, Train Loss: {loss.item():.6f}, Val Loss: {val_loss.item():.6f}")
+            print(f"Epoch {epoch}, Train Loss: {loss.item():.6f}, Val Loss: {val_loss.item():.6f}, Train MSE: {train_mse:.6f}, Val MSE: {val_mse:.6f}")
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             patience_counter = 0
             best_model_state = copy.deepcopy(model.state_dict())
+            best_epoch = epoch
         else:
             patience_counter += 1
         
@@ -202,6 +214,8 @@ def train_model(model: nn.Module, train_data: List[Tuple[torch.Tensor, torch.Ten
             
     if best_model_state:
         model.load_state_dict(best_model_state)
+    
+    return history, best_epoch
 
 def vector_to_label(predicted_class_idx: int, predicted_data: np.ndarray[Any, Any]) -> str:
     """
@@ -248,7 +262,39 @@ def get_relevant_indices_for_event(event_class_idx: int) -> Tuple[int, int]:
     length = get_vectorizer_output_length(events_id_list[event_class_idx])
     return start_idx, start_idx + length
 
-def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]) -> float:
+def calculate_targeted_mse(
+    class_pred: torch.Tensor, data_pred: torch.Tensor, 
+    target_classes: torch.Tensor, target_datas: torch.Tensor
+) -> float:
+    """
+    AI: Calculates the 'targeted' MSE, focusing only on the regression data
+    relevant to the true class for each item in the batch.
+    """
+    targeted_mses = []
+    num_items = class_pred.shape[0]
+
+    with torch.no_grad():
+        for i in range(num_items):
+            actual_class_idx = int(target_classes[i].item())
+            
+            start, end = get_relevant_indices_for_event(actual_class_idx)
+            if end > start:
+                relevant_preds = data_pred[i, start:end]
+                relevant_targets = target_datas[i, start:end]
+
+                mask = ~torch.isnan(relevant_targets)
+                if mask.any():
+                    mse = nn.functional.mse_loss(
+                        torch.masked_select(relevant_preds, mask),
+                        torch.masked_select(relevant_targets, mask)
+                    ).item()
+                    targeted_mses.append(float(mse))
+
+    if not targeted_mses:
+        return float('nan')
+    return float(np.mean(targeted_mses))
+
+def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]) -> Tuple[float, Dict[str, Any], Dict[str, Any]]:
     """
     AI: Evaluates the model's performance, printing metrics and returning the targeted MSE.
     """
@@ -256,6 +302,8 @@ def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor
     actual_labels: list[str] = []
     predicted_labels: list[str] = []
     targeted_mses: list[float] = []
+    all_predictions: list[np.ndarray[Any, Any]] = []
+    all_targets: list[np.ndarray[Any, Any]] = []
 
     with torch.no_grad():
         for context, target_class, target_data in data:
@@ -266,6 +314,10 @@ def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor
 
             actual_class_idx = int(target_class.item())
             
+            # AI: Store predictions and targets for detailed analysis
+            all_predictions.append(pred_data_squeezed.cpu().numpy())
+            all_targets.append(target_data.cpu().numpy())
+
             # AI: Calculate Targeted MSE
             start, end = get_relevant_indices_for_event(actual_class_idx)
             if end > start: # AI: Only if there is regression data for this event
@@ -290,7 +342,7 @@ def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor
     labels: list[str] = sorted(list(set(actual_labels)))
     if not labels:
         print("No data to evaluate.")
-        return float('nan')
+        return float('nan'), {}, {}
         
     cm: np.ndarray[Any, Any] = confusion_matrix(actual_labels, predicted_labels, labels=labels)
     acc: float = float(accuracy_score(actual_labels, predicted_labels))
@@ -313,7 +365,17 @@ def evaluate_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor
         avg_targeted_mse = float(np.mean(targeted_mses))
         print(f"Average Targeted MSE (on relevant data only): {avg_targeted_mse:.6f}")
 
-    return avg_targeted_mse
+    classification_metrics = {
+        'accuracy': acc,
+        'confusion_matrix': cm,
+        'labels': labels
+    }
+    evaluation_data = {
+        'predictions': all_predictions,
+        'targets': all_targets
+    }
+
+    return avg_targeted_mse, classification_metrics, evaluation_data
 
 def main():
     """
@@ -346,9 +408,9 @@ def main():
     # performance should be perfect
     print("\nTraining model WITH context...")
     model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
-    train_model(model_with_context, train_data_with_context, val_data_with_context)
+    history_wc, best_epoch_wc = train_model(model_with_context, train_data_with_context, val_data_with_context)
     print("Evaluating model WITH context...")
-    mse_with_context = evaluate_model(model_with_context, data_with_context)
+    mse_with_context, metrics_wc, evals_wc = evaluate_model(model_with_context, data_with_context)
     print("-" * 40)
 
     # # --- WITHOUT CONTEXT ---
@@ -365,10 +427,38 @@ def main():
     # performance should be bad
     print("\nTraining model WITHOUT BACKPROP NONE VALUES...")
     model_without_backprop_none_values = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
-    train_model(model_without_backprop_none_values, train_data_with_context_coercion, val_data_with_context_coercion)
+    history_wcc, best_epoch_wcc = train_model(model_without_backprop_none_values, train_data_with_context_coercion, val_data_with_context_coercion)
     print("Evaluating model WITHOUT BACKPROP NONE VALUES...")
-    mse_without_backprop = evaluate_model(model_without_backprop_none_values, data_with_context_coercion)
+    mse_without_backprop, metrics_wcc, evals_wcc = evaluate_model(model_without_backprop_none_values, data_with_context_coercion)
     print("-" * 40)
+
+    # --- Save Results ---
+    results = {
+        'num_trials': 1,
+        'correct_model': {
+            'mse_results': [mse_with_context],
+            'mean_mse': mse_with_context,
+            'std_mse': 0,
+            'epochs': [best_epoch_wc],
+            'all_learning_curves': [history_wc],
+            'all_evaluations': [evals_wc],
+            'final_metrics': metrics_wc
+        },
+        'incorrect_model': {
+            'mse_results': [mse_without_backprop],
+            'mean_mse': mse_without_backprop,
+            'std_mse': 0,
+            'epochs': [best_epoch_wcc],
+            'all_learning_curves': [history_wcc],
+            'all_evaluations': [evals_wcc],
+            'final_metrics': metrics_wcc
+        }
+    }
+
+    results_path = os.path.join(os.path.dirname(__file__), 'results.npy')
+    np.save(results_path, results)
+    print(f"\nResults saved to {results_path}")
+
 
     # --- FINAL CHECK ---
     print("\n--- Final Quantitative Check ---")
