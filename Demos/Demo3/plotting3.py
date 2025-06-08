@@ -39,20 +39,18 @@ def plot_aggregated_learning_curves(
 
 def plot_results():
     """
-    Loads experiment results from results.json and generates plots.
+    Plots the results from the .npy file.
     """
-    base_dir = os.path.dirname(__file__)
-    graphs_dir = os.path.join(base_dir, 'graphs')
+    results_path = os.path.join(os.path.dirname(__file__), 'results.npy')
+    graphs_dir = os.path.join(os.path.dirname(__file__), 'graphs')
     os.makedirs(graphs_dir, exist_ok=True)
 
-    results_path = os.path.join(base_dir, 'results.json')
     if not os.path.exists(results_path):
-        print(f"Error: Results file not found at {results_path}")
-        print("Please run the experiment script (models3.py) first to generate the results.")
+        print(f"Results file not found at: {results_path}")
+        print("Please run models3.py first to generate the results.")
         return
 
-    with open(results_path, 'r') as f:
-        data = json.load(f)
+    data = np.load(results_path, allow_pickle=True).item()
 
     correct_model_data = data['correct_model']
     incorrect_model_data = data['incorrect_model']

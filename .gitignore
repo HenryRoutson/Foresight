@@ -3,3 +3,6 @@
 *.pyc
 *results.json*
 Demos/Demo3/results.json
+results/
+*.json
+*.npy

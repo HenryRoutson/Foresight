@@ -9,13 +9,12 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.metrics import confusion_matrix, accuracy_score
 from sklearn.model_selection import train_test_split
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Dict
 import sys, os
 import random
 import math
 import copy
 from scipy.stats import ttest_ind # type: ignore # AI: Consider `pip install types-scipy` to remove this ignore
-import json
 
 # AI: Set random seeds for reproducibility
 random.seed(42)
@@ -361,7 +360,6 @@ def main():
     print(f"Incorrect Model (Coercion) MSE -> Mean: {mean_incorrect:.4f}, Std: {std_incorrect:.4f}")
 
     # --- Perform t-test ---
-    p_value = float('nan')
     if len(results_correct) > 1 and len(results_incorrect) > 1:
         t_stat, p_value = ttest_ind(results_correct, results_incorrect) # type: ignore
         print(f"\nIndependent t-test results: t-statistic = {t_stat:.4f}, p-value = {p_value:.4f}")
@@ -369,8 +367,11 @@ def main():
             print("The difference is statistically significant (p < 0.05).")
         else:
             print("The difference is not statistically significant (p >= 0.05).")
+    else:
+        t_stat, p_value = None, None
+        print("\nCould not perform t-test: requires at least 2 data points for each model.")
 
-    # --- Save results to JSON ---
+    # AI: Save results to a .npy file
     results_data = {
         "num_trials": num_trials,
         "correct_model": {
@@ -392,10 +393,12 @@ def main():
             "p_value": p_value
         }
     }
-    results_path = os.path.join(os.path.dirname(__file__), 'results.json')
-    with open(results_path, 'w') as f:
-        json.dump(results_data, f, indent=4)
-    print(f"\nSaved experiment results to: {results_path}")
+
+    results_path = os.path.join(os.path.dirname(__file__), 'results.npy')
+    
+    np.save(results_path, results_data)
+    
+    print(f"\nResults saved to {results_path}")
 
 if __name__ == "__main__":
     main()
