@@ -1,0 +1,55 @@
+drwx-----T  6 henry  staff  192 Jun  8 11:23 /private/var/folders/t9/mqtv83xs7hnbl7n4zl7q0l940000gn/T/henry-cursor-zsh
+henry@MacBook-Pro-46 Foresight % python3 -m Demos.Demo2.models2
+Preparing data...
+
+Training model WITH context...
+Epoch 100, Loss: 0.26619505882263184
+Epoch 200, Loss: 0.013121494092047215
+Epoch 300, Loss: 0.006070493254810572
+Epoch 400, Loss: 0.00409720977768302
+Epoch 500, Loss: 0.0031585583928972483
+Epoch 600, Loss: 0.002653413685038686
+Epoch 700, Loss: 0.002388053573668003
+Epoch 800, Loss: 0.0022551582660526037
+Epoch 900, Loss: 0.002203692914918065
+Evaluating model WITH context...
+Labels for Confusion Matrix: ['A', 'F', 'T']
+Confusion Matrix:
+           A     F     T
+     Predicted↓ True→
+    A |    3     0     0 
+    F |    0     3     0 
+    T |    0     0     3 
+Accuracy: 1.0000 (9/9)
+Average Targeted MSE (on relevant data only): 0.000008
+----------------------------------------
+
+Training model WITHOUT BACKPROP NONE VALUES...
+Epoch 100, Loss: 0.14855551719665527
+Epoch 200, Loss: 0.011859772726893425
+Epoch 300, Loss: 0.006492723245173693
+Epoch 400, Loss: 0.004540243186056614
+Epoch 500, Loss: 0.0035639849957078695
+Epoch 600, Loss: 0.0030262309592217207
+Epoch 700, Loss: 0.002727759536355734
+Epoch 800, Loss: 0.002575789112597704
+Epoch 900, Loss: 0.002516650827601552
+Evaluating model WITHOUT BACKPROP NONE VALUES...
+Labels for Confusion Matrix: ['A', 'F', 'T']
+Confusion Matrix:
+           A     F     T
+     Predicted↓ True→
+    A |    3     0     0 
+    F |    0     3     0 
+    T |    0     0     3 
+Accuracy: 1.0000 (9/9)
+Average Targeted MSE (on relevant data only): 0.000014
+----------------------------------------
+
+--- Final Quantitative Check ---
+Correct Model (with masking) Targeted MSE:   0.000008
+Incorrect Model (coerced to 0) Targeted MSE: 0.000014
+
+SUCCESS: The model trained with incorrect zero-coercion has a higher regression error.
+This quantitatively proves that masking is the superior method.
+henry@MacBook-Pro-46 Foresight % 
