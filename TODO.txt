@@ -1,10 +1,16 @@
 
+
+
+json takes up a lot of space, 
+change it to some np file which is more space efficient and add it to the gitignore
+
+
+
+
 use the number of epochs as another axis 
 
+demo 3 needs to use Event , i am not sure it is working correcly
 
-
-why it it only taking incorrect for the first trial
-change number of trials to 2 to save time
 
 
 show how the average prediction for Coercion model is closer to 0
