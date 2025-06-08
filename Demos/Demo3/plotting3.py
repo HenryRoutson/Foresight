@@ -1,7 +1,41 @@
 import json
 import os
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 import numpy as np
+from typing import List, Dict, Any
+
+def plot_aggregated_learning_curves(
+    ax: Axes, 
+    all_curves: List[Dict[str, Any]], 
+    metric: str, 
+    color: str, 
+    label: str, 
+    linestyle: str = '-'
+):
+    """
+    Plots individual learning curves with transparency and a bold average curve.
+    """
+    all_metrics = []
+    max_len = 0
+
+    for curve in all_curves:
+        # Plot individual trial curves
+        ax.plot(curve['epochs'], curve[metric], color=color, alpha=0.15, linestyle=linestyle)
+        all_metrics.append(curve[metric])
+        if len(curve['epochs']) > max_len:
+            max_len = len(curve['epochs'])
+    
+    # Pad metrics to the same length for averaging
+    padded_metrics = [m + [np.nan] * (max_len - len(m)) for m in all_metrics]
+    mean_metric = np.nanmean(np.array(padded_metrics), axis=0)
+    
+    # Get the corresponding epochs from the longest trial
+    longest_curve = max(all_curves, key=lambda c: len(c['epochs']))
+    epochs = longest_curve['epochs']
+
+    # Plot average curve
+    ax.plot(epochs, mean_metric, color=color, label=label, linewidth=2.5, linestyle=linestyle)
 
 def plot_results():
     """
@@ -78,34 +112,44 @@ def plot_results():
     print(f"Saved error vs. epochs scatter plot to: {scatter_plot_path}")
     plt.close()
 
-    # --- Create and save the learning curve plot ---
-    if (correct_model_data.get('learning_curves') and incorrect_model_data.get('learning_curves') and
-        correct_model_data['learning_curves']['epochs']):
+    # --- Create and save the aggregated learning curve plots ---
+    if 'all_learning_curves' in correct_model_data and correct_model_data['all_learning_curves']:
+        # Plot for Hybrid Loss
+        fig, ax = plt.subplots(figsize=(12, 7))
+        plot_aggregated_learning_curves(ax, correct_model_data['all_learning_curves'], 'train_loss', 'blue', 'Correct Model - Train Loss', linestyle='--')
+        plot_aggregated_learning_curves(ax, correct_model_data['all_learning_curves'], 'val_loss', 'blue', 'Correct Model - Val Loss')
+        plot_aggregated_learning_curves(ax, incorrect_model_data['all_learning_curves'], 'train_loss', 'orange', 'Incorrect Model - Train Loss', linestyle='--')
+        plot_aggregated_learning_curves(ax, incorrect_model_data['all_learning_curves'], 'val_loss', 'orange', 'Incorrect Model - Val Loss')
         
-        plt.figure(figsize=(12, 7))
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Hybrid Loss')
+        ax.set_title(f'Aggregated Model Learning Curves over {num_trials} Trials')
+        ax.legend()
+        ax.grid(True)
+        ax.set_yscale('log')
         
-        # Correct Model
-        plt.plot(correct_model_data['learning_curves']['epochs'], correct_model_data['learning_curves']['train_loss'], 
-                 label='Correct Model - Train Loss', color='blue', linestyle='--')
-        plt.plot(correct_model_data['learning_curves']['epochs'], correct_model_data['learning_curves']['val_loss'], 
-                 label='Correct Model - Val Loss', color='blue')
-
-        # Incorrect Model
-        plt.plot(incorrect_model_data['learning_curves']['epochs'], incorrect_model_data['learning_curves']['train_loss'], 
-                 label='Incorrect Model - Train Loss', color='orange', linestyle='--')
-        plt.plot(incorrect_model_data['learning_curves']['epochs'], incorrect_model_data['learning_curves']['val_loss'], 
-                 label='Incorrect Model - Val Loss', color='orange')
-        
-        plt.xlabel('Epoch')
-        plt.ylabel('Hybrid Loss')
-        plt.title('Model Learning Curves (from First Trial)')
-        plt.legend()
-        plt.grid(True)
-        plt.yscale('log') # Use a log scale for better visibility of early-stage differences
-        
-        learning_curve_path = os.path.join(os.path.dirname(__file__), 'learning_curves.png')
+        learning_curve_path = os.path.join(os.path.dirname(__file__), 'loss_learning_curves.png')
         plt.savefig(learning_curve_path)
-        print(f"Saved learning curve plot to: {learning_curve_path}")
+        print(f"Saved aggregated loss learning curve plot to: {learning_curve_path}")
+        plt.close()
+
+        # Plot for Targeted MSE
+        fig, ax = plt.subplots(figsize=(12, 7))
+        plot_aggregated_learning_curves(ax, correct_model_data['all_learning_curves'], 'train_mse', 'blue', 'Correct Model - Train MSE', linestyle='--')
+        plot_aggregated_learning_curves(ax, correct_model_data['all_learning_curves'], 'val_mse', 'blue', 'Correct Model - Val MSE')
+        plot_aggregated_learning_curves(ax, incorrect_model_data['all_learning_curves'], 'train_mse', 'orange', 'Incorrect Model - Train MSE', linestyle='--')
+        plot_aggregated_learning_curves(ax, incorrect_model_data['all_learning_curves'], 'val_mse', 'orange', 'Incorrect Model - Val MSE')
+
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Targeted MSE')
+        ax.set_title(f'Aggregated Model MSE Curves over {num_trials} Trials')
+        ax.legend()
+        ax.grid(True)
+        ax.set_yscale('log')
+
+        mse_curve_path = os.path.join(os.path.dirname(__file__), 'mse_learning_curves.png')
+        plt.savefig(mse_curve_path)
+        print(f"Saved aggregated MSE learning curve plot to: {mse_curve_path}")
         plt.close()
 
 if __name__ == "__main__":

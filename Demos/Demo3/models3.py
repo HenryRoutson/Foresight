@@ -132,6 +132,16 @@ def hybrid_loss(class_pred: torch.Tensor, data_pred: torch.Tensor,
         
     return class_loss + 1.0 * data_loss # AI: Simplified weight for demo
 
+def calculate_mse(data_pred: torch.Tensor, target_data: torch.Tensor) -> torch.Tensor:
+    """AI: Calculates the masked Mean Squared Error."""
+    mask = ~torch.isnan(target_data)
+    if not mask.any():
+        return torch.tensor(0.0, device=data_pred.device)
+    
+    data_pred_masked = torch.masked_select(data_pred, mask)
+    target_data_masked = torch.masked_select(target_data, mask)
+    return nn.functional.mse_loss(data_pred_masked, target_data_masked)
+
 def train_model(
     model: nn.Module, train_data: DataType, val_data: DataType, 
     patience: int = 100, capture_learning_curves: bool = False
@@ -145,12 +155,12 @@ def train_model(
     
     # --- Early Stopping Setup ---
     best_val_loss = float('inf')
-    epochs_no_improve = 0
-    best_model_wts = copy.deepcopy(model.state_dict())
     best_epoch = 0
+    patience_counter = 0
+    best_model_state = None
 
     # --- Learning Curve Data ---
-    learning_curves = {"epochs": [], "train_loss": [], "val_loss": []}
+    learning_curves: dict[str, list[float]] = {"epochs": [], "train_loss": [], "val_loss": [], "train_mse": [], "val_mse": []}
 
     # --- Prepare data Tensors ---
     train_contexts = torch.stack([item[0] for item in train_data])
@@ -179,29 +189,34 @@ def train_model(
             val_class_pred, val_data_pred = model(val_contexts)
             val_loss = hybrid_loss(val_class_pred, val_data_pred, val_target_classes, val_target_datas)
 
-        if epoch > 0 and (epoch % 100 == 0 or epoch == EPOCHS -1):
+        if epoch % 100 == 0:
             print(f"Epoch {epoch}, Train Loss: {train_loss.item():.4f}, Val Loss: {val_loss.item():.4f}")
             if capture_learning_curves:
+                train_mse = calculate_mse(data_pred, train_target_datas)
+                val_mse = calculate_mse(val_data_pred, val_target_datas)
                 learning_curves["epochs"].append(epoch)
                 learning_curves["train_loss"].append(train_loss.item())
                 learning_curves["val_loss"].append(val_loss.item())
+                learning_curves["train_mse"].append(train_mse.item())
+                learning_curves["val_mse"].append(val_mse.item())
 
         # --- Early Stopping Check ---
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            epochs_no_improve = 0
-            best_model_wts = copy.deepcopy(model.state_dict())
+            patience_counter = 0
+            best_model_state = copy.deepcopy(model.state_dict())
             best_epoch = epoch
         else:
-            epochs_no_improve += 1
+            patience_counter += 1
 
-        if epochs_no_improve >= patience:
+        if patience_counter >= patience:
             print(f"\nEarly stopping triggered at epoch {epoch}. Best Val Loss: {best_val_loss:.4f}")
             break
             
     # --- Load best model weights ---
     print("\nFinished training. Restoring best model weights.")
-    model.load_state_dict(best_model_wts)
+    if best_model_state:
+        model.load_state_dict(best_model_state)
     return best_epoch, learning_curves
 
 def get_relevant_indices_for_event(event_class_idx: int) -> Tuple[int, int]:
@@ -312,24 +327,21 @@ def main():
     train_data_woc, val_data_woc = train_test_split(data_with_context_coercion, test_size=0.2, random_state=42, shuffle=False) # type: ignore
     print(f"Data split into {len(train_data_wc)} training samples and {len(val_data_wc)} validation samples.")
 
-    num_trials : int = 3  # AI: Number of times to run the experiment
+    num_trials : int = 10  # AI: Number of times to run the experiment
     results_correct : list[float] = []
     results_incorrect : list[float] = []
     epochs_correct_list: list[int] = []
     epochs_incorrect_list: list[int] = []
-    # AI: We'll only capture learning curves for the first trial to keep the results file clean
-    learning_curves_correct: dict[str, list[float]] = {}
-    learning_curves_incorrect: dict[str, list[float]] = {}
+    # AI: We'll capture learning curves for all trials now
+    all_curves_correct: list[dict[str, list[float]]] = []
+    all_curves_incorrect: list[dict[str, list[float]]] = []
 
-
+    print(f"\nRunning {num_trials} trials...")
     for i in range(num_trials):
-        # AI: Re-seed each trial for model weight initialization to be different but reproducible
-        torch.manual_seed(42 + i)
-        np.random.seed(42 + i)
-        random.seed(42 + i)
+        print(f"\n--- Trial {i+1}/{num_trials} ---")
         
-        # AI: Only capture learning curves for the first trial
-        capture_curves = i == 0
+        # AI: Capture learning curves for all trials to get a statistical sample
+        capture_curves = True
         mse_correct, mse_incorrect, epochs_correct, epochs_incorrect, curves_correct, curves_incorrect = run_single_experiment(
             train_data_wc, val_data_wc, train_data_woc, val_data_woc, capture_learning_curves=capture_curves
         )
@@ -339,17 +351,14 @@ def main():
             epochs_correct_list.append(epochs_correct)
             epochs_incorrect_list.append(epochs_incorrect)
             if capture_curves:
-                learning_curves_correct = curves_correct
-                learning_curves_incorrect = curves_incorrect
-
-
-    # --- Final Statistical Analysis ---
-    print("\n\n--- Final Statistical Analysis ---")
+                all_curves_correct.append(curves_correct)
+                all_curves_incorrect.append(curves_incorrect)
     
-    mean_correct = np.mean(results_correct)
-    std_correct = np.std(results_correct)
-    mean_incorrect = np.mean(results_incorrect)
-    std_incorrect = np.std(results_incorrect)
+    # --- Statistical Analysis ---
+    mean_correct = float(np.mean(results_correct))
+    std_correct = float(np.std(results_correct))
+    mean_incorrect = float(np.mean(results_incorrect))
+    std_incorrect = float(np.std(results_incorrect))
 
     print(f"Correct Model (Masking) MSE -> Mean: {mean_correct:.4f}, Std: {std_correct:.4f}")
     print(f"Incorrect Model (Coercion) MSE -> Mean: {mean_incorrect:.4f}, Std: {std_incorrect:.4f}")
@@ -372,16 +381,17 @@ def main():
             "epochs": epochs_correct_list,
             "mean_mse": mean_correct,
             "std_mse": std_correct,
-            "learning_curves": learning_curves_correct
+            "all_learning_curves": all_curves_correct
         },
         "incorrect_model": {
             "mse_results": results_incorrect,
             "epochs": epochs_incorrect_list,
             "mean_mse": mean_incorrect,
             "std_mse": std_incorrect,
-            "learning_curves": learning_curves_incorrect
+            "all_learning_curves": all_curves_incorrect
         },
-        "ttest": {
+        "t_test": {
+            "statistic": t_stat,
             "p_value": p_value
         }
     }
