@@ -41,7 +41,11 @@ def plot_results():
     """
     Loads experiment results from results.json and generates plots.
     """
-    results_path = os.path.join(os.path.dirname(__file__), 'results.json')
+    base_dir = os.path.dirname(__file__)
+    graphs_dir = os.path.join(base_dir, 'graphs')
+    os.makedirs(graphs_dir, exist_ok=True)
+
+    results_path = os.path.join(base_dir, 'results.json')
     if not os.path.exists(results_path):
         print(f"Error: Results file not found at {results_path}")
         print("Please run the experiment script (models3.py) first to generate the results.")
@@ -80,7 +84,7 @@ def plot_results():
     plt.legend()
     plt.grid(True)
     
-    plot_path = os.path.join(os.path.dirname(__file__), 'error_distribution_histogram.png')
+    plot_path = os.path.join(graphs_dir, 'error_distribution_histogram.png')
     plt.savefig(plot_path)
     print(f"Saved error distribution plot to: {plot_path}")
     plt.close()
@@ -107,7 +111,7 @@ def plot_results():
     plt.legend()
     plt.grid(True)
     
-    scatter_plot_path = os.path.join(os.path.dirname(__file__), 'error_vs_epochs_scatter.png')
+    scatter_plot_path = os.path.join(graphs_dir, 'error_vs_epochs_scatter.png')
     plt.savefig(scatter_plot_path)
     print(f"Saved error vs. epochs scatter plot to: {scatter_plot_path}")
     plt.close()
@@ -128,7 +132,7 @@ def plot_results():
         ax.grid(True)
         ax.set_yscale('log')
         
-        learning_curve_path = os.path.join(os.path.dirname(__file__), 'loss_learning_curves.png')
+        learning_curve_path = os.path.join(graphs_dir, 'loss_learning_curves.png')
         plt.savefig(learning_curve_path)
         print(f"Saved aggregated loss learning curve plot to: {learning_curve_path}")
         plt.close()
@@ -147,7 +151,7 @@ def plot_results():
         ax.grid(True)
         ax.set_yscale('log')
 
-        mse_curve_path = os.path.join(os.path.dirname(__file__), 'mse_learning_curves.png')
+        mse_curve_path = os.path.join(graphs_dir, 'mse_learning_curves.png')
         plt.savefig(mse_curve_path)
         print(f"Saved aggregated MSE learning curve plot to: {mse_curve_path}")
         plt.close()
