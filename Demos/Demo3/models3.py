@@ -14,7 +14,6 @@ import sys, os
 import random
 import math
 import copy
-import matplotlib.pyplot as plt
 from scipy.stats import ttest_ind # type: ignore # AI: Consider `pip install types-scipy` to remove this ignore
 import json
 
@@ -133,10 +132,13 @@ def hybrid_loss(class_pred: torch.Tensor, data_pred: torch.Tensor,
         
     return class_loss + 1.0 * data_loss # AI: Simplified weight for demo
 
-def train_model(model: nn.Module, train_data: DataType, val_data: DataType, patience: int = 100) -> int:
+def train_model(
+    model: nn.Module, train_data: DataType, val_data: DataType, 
+    patience: int = 100, capture_learning_curves: bool = False
+) -> Tuple[int, dict[str, list[float]]]:
     """
     AI: Trains the model using the provided data, with early stopping based on validation loss.
-    Returns the epoch number at which the best model was found.
+    Returns the best epoch and, optionally, the learning curves.
     """
     optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
@@ -146,6 +148,9 @@ def train_model(model: nn.Module, train_data: DataType, val_data: DataType, pati
     epochs_no_improve = 0
     best_model_wts = copy.deepcopy(model.state_dict())
     best_epoch = 0
+
+    # --- Learning Curve Data ---
+    learning_curves = {"epochs": [], "train_loss": [], "val_loss": []}
 
     # --- Prepare data Tensors ---
     train_contexts = torch.stack([item[0] for item in train_data])
@@ -176,6 +181,10 @@ def train_model(model: nn.Module, train_data: DataType, val_data: DataType, pati
 
         if epoch > 0 and (epoch % 100 == 0 or epoch == EPOCHS -1):
             print(f"Epoch {epoch}, Train Loss: {train_loss.item():.4f}, Val Loss: {val_loss.item():.4f}")
+            if capture_learning_curves:
+                learning_curves["epochs"].append(epoch)
+                learning_curves["train_loss"].append(train_loss.item())
+                learning_curves["val_loss"].append(val_loss.item())
 
         # --- Early Stopping Check ---
         if val_loss < best_val_loss:
@@ -193,7 +202,7 @@ def train_model(model: nn.Module, train_data: DataType, val_data: DataType, pati
     # --- Load best model weights ---
     print("\nFinished training. Restoring best model weights.")
     model.load_state_dict(best_model_wts)
-    return best_epoch
+    return best_epoch, learning_curves
 
 def get_relevant_indices_for_event(event_class_idx: int) -> Tuple[int, int]:
     start_idx = 0
@@ -260,30 +269,32 @@ def evaluate_model(model: nn.Module, data: DataType) -> float:
 
 def run_single_experiment(
     train_data_wc: DataType, val_data_wc: DataType, 
-    train_data_woc: DataType, val_data_woc: DataType
-) -> Tuple[float, float, int, int]:
+    train_data_woc: DataType, val_data_woc: DataType,
+    capture_learning_curves: bool = False
+) -> Tuple[float, float, int, int, dict[str, list[float]], dict[str, list[float]]]:
     """
     AI: Runs one full training and evaluation cycle for both models and returns their MSE and best epoch.
+    Optionally captures and returns learning curves.
     """
     print("\n--- Running New Experiment Trial ---")
     
     # --- Train and evaluate the model with correct masking ---
     model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
     print("Training model WITH CONTEXT (Correct Masking)...")
-    epochs_correct = train_model(model_with_context, train_data_wc, val_data_wc)
+    epochs_correct, curves_correct = train_model(model_with_context, train_data_wc, val_data_wc, capture_learning_curves=capture_learning_curves)
     print("Evaluating model WITH CONTEXT...")
     mse_with_context = evaluate_model(model_with_context, val_data_wc)
 
     # --- Train and evaluate the model with incorrect coercion ---
     model_without_backprop = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
     print("\nTraining model WITH COERCED ZEROS (Incorrect)...")
-    epochs_incorrect = train_model(model_without_backprop, train_data_woc, val_data_woc)
+    epochs_incorrect, curves_incorrect = train_model(model_without_backprop, train_data_woc, val_data_woc, capture_learning_curves=capture_learning_curves)
     print("Evaluating model WITH COERCED ZEROS...")
     mse_without_backprop = evaluate_model(model_without_backprop, val_data_woc)
     
     print(f"Trial Results -> Correct MSE: {mse_with_context:.4f} (at epoch {epochs_correct}), Incorrect MSE: {mse_without_backprop:.4f} (at epoch {epochs_incorrect})")
     
-    return mse_with_context, mse_without_backprop, epochs_correct, epochs_incorrect
+    return mse_with_context, mse_without_backprop, epochs_correct, epochs_incorrect, curves_correct, curves_incorrect
 
 def main():
     print("Preparing data...")
@@ -301,24 +312,36 @@ def main():
     train_data_woc, val_data_woc = train_test_split(data_with_context_coercion, test_size=0.2, random_state=42, shuffle=False) # type: ignore
     print(f"Data split into {len(train_data_wc)} training samples and {len(val_data_wc)} validation samples.")
 
-    num_trials : int = 10  # AI: Number of times to run the experiment
+    num_trials : int = 3  # AI: Number of times to run the experiment
     results_correct : list[float] = []
     results_incorrect : list[float] = []
     epochs_correct_list: list[int] = []
     epochs_incorrect_list: list[int] = []
+    # AI: We'll only capture learning curves for the first trial to keep the results file clean
+    learning_curves_correct: dict[str, list[float]] = {}
+    learning_curves_incorrect: dict[str, list[float]] = {}
+
 
     for i in range(num_trials):
         # AI: Re-seed each trial for model weight initialization to be different but reproducible
         torch.manual_seed(42 + i)
         np.random.seed(42 + i)
         random.seed(42 + i)
-
-        mse_correct, mse_incorrect, epochs_correct, epochs_incorrect = run_single_experiment(train_data_wc, val_data_wc, train_data_woc, val_data_woc)
+        
+        # AI: Only capture learning curves for the first trial
+        capture_curves = i == 0
+        mse_correct, mse_incorrect, epochs_correct, epochs_incorrect, curves_correct, curves_incorrect = run_single_experiment(
+            train_data_wc, val_data_wc, train_data_woc, val_data_woc, capture_learning_curves=capture_curves
+        )
         if not (np.isnan(mse_correct) or np.isnan(mse_incorrect)):
             results_correct.append(mse_correct)
             results_incorrect.append(mse_incorrect)
             epochs_correct_list.append(epochs_correct)
             epochs_incorrect_list.append(epochs_incorrect)
+            if capture_curves:
+                learning_curves_correct = curves_correct
+                learning_curves_incorrect = curves_incorrect
+
 
     # --- Final Statistical Analysis ---
     print("\n\n--- Final Statistical Analysis ---")
@@ -348,13 +371,15 @@ def main():
             "mse_results": results_correct,
             "epochs": epochs_correct_list,
             "mean_mse": mean_correct,
-            "std_mse": std_correct
+            "std_mse": std_correct,
+            "learning_curves": learning_curves_correct
         },
         "incorrect_model": {
             "mse_results": results_incorrect,
             "epochs": epochs_incorrect_list,
             "mean_mse": mean_incorrect,
-            "std_mse": std_incorrect
+            "std_mse": std_incorrect,
+            "learning_curves": learning_curves_incorrect
         },
         "ttest": {
             "p_value": p_value
