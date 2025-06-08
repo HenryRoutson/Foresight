@@ -316,23 +316,11 @@ def main():
     data_with_context = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED)
     data_with_context_coercion = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION)
 
-    # --- Split data into training and validation sets ---
-    # AI: Use a fixed random state for reproducibility. Shuffle is False as data has a time component.
-    train_data_wc : DataType
-    val_data_wc : DataType
-    train_data_woc : DataType
-    val_data_woc : DataType
-
-    train_data_wc, val_data_wc = train_test_split(data_with_context, test_size=0.2, random_state=42, shuffle=False) # type: ignore
-    train_data_woc, val_data_woc = train_test_split(data_with_context_coercion, test_size=0.2, random_state=42, shuffle=False) # type: ignore
-    print(f"Data split into {len(train_data_wc)} training samples and {len(val_data_wc)} validation samples.")
-
     num_trials : int = 10  # AI: Number of times to run the experiment
     results_correct : list[float] = []
     results_incorrect : list[float] = []
     epochs_correct_list: list[int] = []
     epochs_incorrect_list: list[int] = []
-    # AI: We'll capture learning curves for all trials now
     all_curves_correct: list[dict[str, list[float]]] = []
     all_curves_incorrect: list[dict[str, list[float]]] = []
 
@@ -340,7 +328,16 @@ def main():
     for i in range(num_trials):
         print(f"\n--- Trial {i+1}/{num_trials} ---")
         
-        # AI: Capture learning curves for all trials to get a statistical sample
+        # AI: Re-seed and re-split the data for each trial to introduce variance
+        trial_seed = 42 + i
+        torch.manual_seed(trial_seed)
+        np.random.seed(trial_seed)
+        random.seed(trial_seed)
+        
+        train_data_wc, val_data_wc = train_test_split(data_with_context, test_size=0.2, random_state=trial_seed, shuffle=True)
+        train_data_woc, val_data_woc = train_test_split(data_with_context_coercion, test_size=0.2, random_state=trial_seed, shuffle=True)
+        print(f"Data re-split for Trial {i+1} with seed {trial_seed}. Train size: {len(train_data_wc)}, Val size: {len(val_data_wc)}")
+
         capture_curves = True
         mse_correct, mse_incorrect, epochs_correct, epochs_incorrect, curves_correct, curves_incorrect = run_single_experiment(
             train_data_wc, val_data_wc, train_data_woc, val_data_woc, capture_learning_curves=capture_curves
