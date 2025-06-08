@@ -6,8 +6,8 @@ from typing import List, Tuple, Any, Optional, NewType, TypedDict
 
 # --- Configuration ---
 # AI: Increased sample count and context window to create a more complex task
-NUM_SAMPLES = 500
-CONTEXT_WINDOW = 10
+NUM_SAMPLES = 1000
+CONTEXT_WINDOW = 15
 PRICE_SERIES_LENGTH = NUM_SAMPLES + CONTEXT_WINDOW + 2
 
 # Event IDs
