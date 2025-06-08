@@ -1,0 +1,12 @@
+
+
+...
+
+
+Correct Model (Masking) MSE -> Mean: 0.9635, Std: 0.2880
+Incorrect Model (Coercion) MSE -> Mean: 3.1560, Std: 4.3827
+
+Independent t-test results: t-statistic = -1.4976, p-value = 0.1516
+The difference is not statistically significant (p >= 0.05).
+
+Saved experiment results to: /Users/henry/Documents/Documents - MacBook Pro (6)/Git.nosync/Foresight/Demos/Demo3/results.json
