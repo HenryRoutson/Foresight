@@ -12,6 +12,7 @@ from typing import List, Tuple, Any
 import sys, os
 import random
 import math
+import copy
 
 # AI: Set random seeds for reproducibility
 random.seed(42)
@@ -56,6 +57,7 @@ NUM_LAYERS = 2 # AI: Reverted to larger model
 
 EPOCHS = 1000 # AI: Increased epochs for better convergence
 LEARNING_RATE = 0.001 # AI: Adjusted learning rate for more stable training
+PATIENCE = 100 # AI: Added for early stopping
 
 def prepare_data(vectorised_data: List[List[np.ndarray[Any, Any]]]) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
     """
@@ -150,28 +152,56 @@ def hybrid_loss(class_pred: torch.Tensor, data_pred: torch.Tensor,
     # AI: Weighting data_loss to prevent it from overwhelming classification loss.
     return class_loss + 1.0 * data_loss
 
-def train_model(model: nn.Module, data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
+def train_model(model: nn.Module, train_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]], val_data: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
-    model.train()
+    
+    best_val_loss = float('inf')
+    patience_counter = 0
+    best_model_state = None
 
     # AI: Collate data into a single batch for stable training
-    contexts = torch.stack([item[0] for item in data])
-    target_classes = torch.stack([item[1] for item in data])
-    target_datas = torch.stack([item[2] for item in data])
+    train_contexts = torch.stack([item[0] for item in train_data])
+    train_target_classes = torch.stack([item[1] for item in train_data])
+    train_target_datas = torch.stack([item[2] for item in train_data])
+
+    val_contexts = torch.stack([item[0] for item in val_data])
+    val_target_classes = torch.stack([item[1] for item in val_data])
+    val_target_datas = torch.stack([item[2] for item in val_data])
 
     for epoch in range(EPOCHS):
+        model.train()
         optimizer.zero_grad()
-        class_pred, data_pred = model(contexts)
-        loss = hybrid_loss(class_pred, data_pred, target_classes, target_datas)
-
-        if epoch > 0 and epoch % 100 == 0:
-            print(f"Epoch {epoch}, Loss: {loss.item()}")
+        class_pred, data_pred = model(train_contexts)
+        loss = hybrid_loss(class_pred, data_pred, train_target_classes, train_target_datas)
 
         if not torch.isnan(loss):
             loss.backward()
             optimizer.step()
             scheduler.step()
+
+        # AI: Validation phase
+        model.eval()
+        with torch.no_grad():
+            val_class_pred, val_data_pred = model(val_contexts)
+            val_loss = hybrid_loss(val_class_pred, val_data_pred, val_target_classes, val_target_datas)
+
+        if epoch > 0 and epoch % 100 == 0:
+            print(f"Epoch {epoch}, Train Loss: {loss.item():.6f}, Val Loss: {val_loss.item():.6f}")
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            patience_counter = 0
+            best_model_state = copy.deepcopy(model.state_dict())
+        else:
+            patience_counter += 1
+        
+        if patience_counter >= PATIENCE:
+            print(f"Early stopping at epoch {epoch} due to no improvement in validation loss for {PATIENCE} epochs.")
+            break
+            
+    if best_model_state:
+        model.load_state_dict(best_model_state)
 
 def vector_to_label(predicted_class_idx: int, predicted_data: np.ndarray[Any, Any]) -> str:
     """
@@ -295,11 +325,28 @@ def main():
     data_with_context_coercion = prepare_data(TRAINING_DATA_WITH_CONTEXT_VECTORISED_COERCION)
 
 
+    # AI: Shuffle and split data for training and validation
+    random.shuffle(data_with_context)
+    split_idx_wc = int(len(data_with_context) * 0.8)
+    train_data_with_context = data_with_context[:split_idx_wc]
+    val_data_with_context = data_with_context[split_idx_wc:]
+    if not train_data_with_context or not val_data_with_context:
+        train_data_with_context = data_with_context
+        val_data_with_context = data_with_context
+
+    random.shuffle(data_with_context_coercion)
+    split_idx_wcc = int(len(data_with_context_coercion) * 0.8)
+    train_data_with_context_coercion = data_with_context_coercion[:split_idx_wcc]
+    val_data_with_context_coercion = data_with_context_coercion[split_idx_wcc:]
+    if not train_data_with_context_coercion or not val_data_with_context_coercion:
+        train_data_with_context_coercion = data_with_context_coercion
+        val_data_with_context_coercion = data_with_context_coercion
+
     # --- WITH CONTEXT ---
     # performance should be perfect
     print("\nTraining model WITH context...")
     model_with_context = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
-    train_model(model_with_context, data_with_context)
+    train_model(model_with_context, train_data_with_context, val_data_with_context)
     print("Evaluating model WITH context...")
     mse_with_context = evaluate_model(model_with_context, data_with_context)
     print("-" * 40)
@@ -318,7 +365,7 @@ def main():
     # performance should be bad
     print("\nTraining model WITHOUT BACKPROP NONE VALUES...")
     model_without_backprop_none_values = TransformerPredictor(INPUT_SIZE, D_MODEL, NHEAD, NUM_LAYERS, NUM_EVENT_TYPES, DATA_VECTOR_SIZE)
-    train_model(model_without_backprop_none_values, data_with_context_coercion)
+    train_model(model_without_backprop_none_values, train_data_with_context_coercion, val_data_with_context_coercion)
     print("Evaluating model WITHOUT BACKPROP NONE VALUES...")
     mse_without_backprop = evaluate_model(model_without_backprop_none_values, data_with_context_coercion)
     print("-" * 40)
