@@ -456,7 +456,7 @@ def main():
     }
 
     results_path = os.path.join(os.path.dirname(__file__), 'results.npy')
-    np.save(results_path, results)
+    np.save(results_path, results, allow_pickle=True)
     print(f"\nResults saved to {results_path}")
 
 

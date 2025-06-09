@@ -235,8 +235,8 @@ def evaluate_model(model: nn.Module, data: DataType) -> Dict[str, Any]:
     all_pred_class_idx: list[int] = []
     all_actual_class_idx: list[int] = []
     targeted_mses: list[float] = []
-    all_data_preds: list[np.ndarray] = []
-    all_target_datas: list[np.ndarray] = []
+    all_data_preds: list[np.ndarray[Any, Any]] = []
+    all_target_datas: list[np.ndarray[Any, Any]] = []
 
     with torch.no_grad():
         for context, target_class, target_data in data:
@@ -422,7 +422,7 @@ def main():
 
     results_path = os.path.join(os.path.dirname(__file__), 'results.npy')
     
-    np.save(results_path, results_data)
+    np.save(results_path, results_data, allow_pickle=True)
     
     print(f"\nResults saved to {results_path}")
 
