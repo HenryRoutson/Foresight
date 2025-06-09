@@ -27,7 +27,7 @@ def plot_aggregated_learning_curves(
             max_len = len(curve['epochs'])
     
     # Pad metrics to the same length for averaging
-    padded_metrics = [m + [np.nan] * (max_len - len(m)) for m in all_metrics]
+    padded_metrics : list[Any] = [m + [np.nan] * (max_len - len(m)) for m in all_metrics]
     mean_metric = np.nanmean(np.array(padded_metrics), axis=0)
     
     # Get the corresponding epochs from the longest trial
@@ -51,6 +51,11 @@ def plot_prediction_distribution(data: Dict[str, Any], graphs_dir: str):
 
     # Helper to collect prediction and target points for each feature index
     def collect_points(evaluations: List[Dict[str, Any]]) -> Tuple[List[float], List[float], List[float], List[float]]:
+        all_preds_0 : list[Any]
+        all_targets_0 : list[Any]
+        all_preds_1 : list[Any]
+        all_targets_1 : list[Any]
+
         all_preds_0, all_targets_0 = [], []
         all_preds_1, all_targets_1 = [], []
 
