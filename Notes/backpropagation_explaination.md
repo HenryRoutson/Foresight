@@ -125,6 +125,31 @@ actual = [
   0 # view_duration_seconds
 ]
 
+expected = [
+
+  # instagram_post outcome -------------------
+  0.35, # probability                          # NOT MASKED
+  45, # time_diff_minutes                      # NOT MASKED
+  2, # num_images                              # NOT MASKED
+  0, # num_videos                              # NOT MASKED
+  1, # has_caption                             # NOT MASKED
+
+  # like_post outcome -------------------
+  0.42, # probability                          # NOT MASKED
+  500, # time_diff_minutes                     # NOT MASKED
+  2, # post_owner_is_follower                  # NOT MASKED
+
+  # delete_account outcome -------------------
+  0.05, # probability                          # NOT MASKED
+  5200, # time_diff_minutes                    # NOT MASKED
+
+  # view_story outcome -------------------
+  0.18, # probability                          # NOT MASKED
+  5, # time_diff_minutes                       # NOT MASKED
+  1, # story_owner_is_follower                 # NOT MASKED
+  2 # view_duration_seconds                    # NOT MASKED
+]
+
 expected # same as above
 ```
 
@@ -133,30 +158,6 @@ expected # same as above
 
 
 ```python
-actual = [
-
-  # instagram_post outcome -------------------
-  1.0, # probability
-  140, # time_diff_minutes
-  4, # num_images
-  1, # num_videos
-  0, # has_caption
-
-  # like_post outcome -------------------
-  0, # probability
-  0, # time_diff_minutes
-  0, # post_owner_is_follower
-
-  # delete_account outcome -------------------
-  0, # probability
-  0, # time_diff_minutes
-
-  # view_story outcome -------------------
-  0, # probability
-  0, # time_diff_minutes
-  0, # story_owner_is_follower
-  0 # view_duration_seconds
-]
 
 expected = [
 
@@ -169,18 +170,18 @@ expected = [
 
   # like_post outcome -------------------
   0.42, # probability                          # NOT MASKED
-  0, # time_diff_minutes                       # MASKED
-  0, # post_owner_is_follower                  # MASKED
+  500, # time_diff_minutes                     # MASKED
+  2, # post_owner_is_follower                  # MASKED
 
   # delete_account outcome -------------------
   0.05, # probability                          # NOT MASKED
-  0, # time_diff_minutes                       # MASKED
+  5200, # time_diff_minutes                    # MASKED
 
   # view_story outcome -------------------
   0.18, # probability                          # NOT MASKED
-  0, # time_diff_minutes                       # MASKED
-  0, # story_owner_is_follower                 # MASKED
-  0 # view_duration_seconds                    # MASKED
+  5, # time_diff_minutes                       # MASKED
+  1, # story_owner_is_follower                 # MASKED
+  2 # view_duration_seconds                    # MASKED
 ]
 ```
 
