@@ -16,8 +16,8 @@ def plot_aggregated_learning_curves(
     """
     Plots individual learning curves with transparency and a bold average curve.
     """
-    all_metrics = []
-    max_len = 0
+    all_metrics : list[Any] = []
+    max_len : int = 0
 
     for curve in all_curves:
         # Plot individual trial curves
